@@ -1,0 +1,483 @@
+<title>PDF仕分けアシスタント</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho:wght@700&display=swap">
+<style>
+/* Layout: 帳簿の罫線を思わせる緑の細罫。上に流れ(入れる→読む→仕分け)、下に表と詳細を並べる */
+:root {
+  --paper: #f4f7f5;
+  --surface: #ffffff;
+  --ink: #1c2923;
+  --muted: #56675e;
+  --rule: #cddbd3;
+  --rule-strong: #9fbcae;
+  --accent: #1d6a50;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2efe8;
+  --warn: #8f5200;
+  --warn-soft: #fff0d9;
+  --err: #b3261e;
+  --head: #eaf1ed;
+  --font-body: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  --font-display: "BIZ UDPMincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3;
+    --rule: #2b3a33; --rule-strong: #3f574b; --accent: #62c39a; --accent-ink: #0d1a14;
+    --accent-soft: #1b3228; --warn: #f2b65c; --warn-soft: #3a2a12; --err: #f28b82; --head: #1e2a24;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3;
+  --rule: #2b3a33; --rule-strong: #3f574b; --accent: #62c39a; --accent-ink: #0d1a14;
+  --accent-soft: #1b3228; --warn: #f2b65c; --warn-soft: #3a2a12; --err: #f28b82; --head: #1e2a24;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+
+header.top {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 12px 24px; padding-block: 28px 18px; border-bottom: 2px solid var(--accent);
+}
+header.top h1 {
+  font-family: var(--font-display); font-size: 26px; line-height: 1.3; margin: 0;
+  letter-spacing: 0.04em; text-wrap: balance;
+}
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.badge-demo {
+  font-size: 12px; letter-spacing: 0.08em; border: 1px solid var(--rule-strong);
+  color: var(--muted); padding: 2px 10px; border-radius: 3px; white-space: nowrap;
+}
+
+/* 流れ(3ステップ) */
+.flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.step {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 14px 16px; display: grid; gap: 4px; min-width: 0;
+}
+.step b { font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+.step span { font-weight: 700; }
+.step small { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+
+/* 操作エリア */
+.controls { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
+.drop {
+  border: 1.5px dashed var(--rule-strong); border-radius: 4px; background: var(--surface);
+  padding: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px;
+  transition: background .15s, border-color .15s;
+}
+.drop.over { background: var(--accent-soft); border-color: var(--accent); }
+.drop p { margin: 0; flex: 1 1 220px; min-width: 0; }
+.drop p small { display: block; color: var(--muted); font-size: 12.5px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button, .filebtn {
+  font: inherit; font-size: 13.5px; cursor: pointer; border-radius: 4px; padding: 7px 14px;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+button.primary, .filebtn { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button:hover, .filebtn:hover { filter: brightness(0.96); }
+button:focus-visible, .filebtn:focus-within, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.summary {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 14px 16px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: center;
+}
+.stat { display: grid; gap: 0; }
+.stat em { font-style: normal; font-size: 12px; color: var(--muted); }
+.stat strong { font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.stat.ok strong { color: var(--accent); }
+.stat.warn strong { color: var(--warn); }
+.master-toggle { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 8px; }
+
+/* スプレッドシート風の表 */
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
+.panel-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--rule);
+}
+.panel-head h2 { font-size: 15px; margin: 0; }
+.panel-head .hint { font-size: 12.5px; color: var(--muted); }
+.sheet-scroll { overflow-x: auto; }
+table.sheet { border-collapse: collapse; width: 100%; min-width: 1060px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.sheet th, .sheet td { border: 1px solid var(--rule); padding: 5px 8px; text-align: left; vertical-align: top; }
+.sheet thead tr.letters th { background: var(--head); color: var(--muted); font-weight: 400; font-size: 11.5px; text-align: center; padding: 2px 4px; }
+.sheet thead tr.names th { background: var(--accent-soft); font-weight: 700; white-space: nowrap; }
+.sheet .rownum { background: var(--head); color: var(--muted); text-align: center; width: 36px; font-size: 11.5px; }
+.sheet tbody tr { cursor: pointer; }
+.sheet tbody tr:hover td:not(.rownum) { background: var(--accent-soft); }
+.sheet tbody tr.sel td:not(.rownum) { background: var(--accent-soft); box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+.sheet td.num { text-align: right; white-space: nowrap; }
+.sheet td.file { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; min-width: 240px; }
+.sheet td.nowrap { white-space: nowrap; }
+.sheet td.empty { color: var(--muted); }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.loading { background: var(--head); color: var(--muted); }
+.tag-sample { font-size: 11px; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+
+/* 下段:詳細 + フォルダ */
+.lower { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.detail-body { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 16px; padding: 14px; }
+.preview { border: 1px solid var(--rule); background: #fff; border-radius: 2px; min-height: 120px; display: grid; place-items: center; overflow: hidden; }
+.preview canvas { width: 100%; height: auto; display: block; }
+dl.fields { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+dl.fields dt { color: var(--muted); }
+dl.fields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+dl.fields dd small { color: var(--muted); }
+.issues { margin: 10px 0 0; padding: 8px 12px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; font-size: 13px; }
+.issues ul { margin: 2px 0 0; padding-left: 18px; }
+details.raw { margin-top: 12px; }
+details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); border: 1px solid var(--rule); padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
+.placeholder { padding: 24px 14px; color: var(--muted); }
+
+.tree { list-style: none; margin: 0; padding: 12px 14px 14px; font-size: 13px; }
+.tree ul { list-style: none; margin: 0; padding-left: 18px; border-left: 1px solid var(--rule); }
+.tree li { padding: 2px 0 2px 6px; overflow-wrap: anywhere; }
+.tree .folder::before, .tree .pdf::before {
+  content: ""; display: inline-block; width: 12px; height: 9px; margin-right: 6px; vertical-align: 0; border-radius: 1px;
+}
+.tree .folder::before { background: var(--accent); }
+.tree .folder.review::before { background: var(--warn); }
+.tree .pdf { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tree .pdf::before { width: 8px; height: 10px; border: 1px solid var(--muted); background: transparent; }
+
+.note { font-size: 12.5px; color: var(--muted); line-height: 1.8; margin: 0; }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 4px; font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .flow, .controls, .lower { grid-template-columns: minmax(0, 1fr); }
+  .detail-body { grid-template-columns: minmax(0, 1fr); }
+  .preview { max-width: 260px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>PDF仕分けアシスタント</h1>
+      <p>保存フォルダに放り込まれた書類PDFを読み取り、<br>
+        書類種別・関与先・対象期間ごとにスプレッドシートへ整理します。</p>
+    </div>
+    <span class="badge-demo">提案用デモ・架空データ</span>
+  </header>
+
+  <section class="flow" aria-label="処理の流れ">
+    <div class="step"><b>STEP 1</b><span>PDFを入れる</span><small>TKCで作成した書類をPDFにして、<br>いつもの受付フォルダへ保存するだけ。</small></div>
+    <div class="step"><b>STEP 2</b><span>中身を読み取る</span><small>書類種別・関与先コード・期間・金額を<br>自動で拾い、一覧表に1行ずつ記録。</small></div>
+    <div class="step"><b>STEP 3</b><span>名前を付けて仕分け</span><small>「関与先/年度/書類種別」のフォルダへ移動。<br>自信がないものは「要確認」に。</small></div>
+  </section>
+
+  <section class="controls">
+    <div class="drop" id="drop">
+      <p>ここにPDFをドラッグ&ドロップ
+        <small>読み取りはこのブラウザの中だけで行い、<br>PDFをサーバーへ送信しません。</small></p>
+      <div class="btns">
+        <label class="filebtn" for="file">PDFを選ぶ<input id="file" type="file" accept="application/pdf,.pdf" multiple></label>
+        <button id="btn-sample" type="button">サンプル7件を読み直す</button>
+        <button id="btn-clear" type="button">表を空にする</button>
+      </div>
+    </div>
+    <div class="summary" aria-live="polite">
+      <div class="stat"><em>読み取った件数</em><strong id="s-total">0</strong></div>
+      <div class="stat ok"><em>自動で仕分け</em><strong id="s-ok">0</strong></div>
+      <div class="stat warn"><em>要確認</em><strong id="s-warn">0</strong></div>
+      <label class="master-toggle" for="use-master"><input id="use-master" type="checkbox" checked> 関与先マスタ(4社)と照合して、名前の表記ゆれをそろえる</label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>書類一覧(Googleスプレッドシートに書き込まれる内容)</h2>
+      <div class="btns">
+        <span class="hint">行をクリックすると、読み取りの根拠が見られます</span>
+        <button id="btn-copy" type="button" class="primary">表をコピー(スプシに貼り付け可)</button>
+      </div>
+    </div>
+    <div class="sheet-scroll">
+      <table class="sheet" id="sheet">
+        <thead>
+          <tr class="letters"><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th></tr>
+          <tr class="names"><th class="rownum">1</th><th>ステータス</th><th>書類種別</th><th>関与先コード</th><th>関与先名</th><th>対象期間</th><th>作成日</th><th>金額</th><th>新ファイル名</th><th>元のファイル名</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="lower">
+    <div class="panel">
+      <div class="panel-head"><h2>読み取りの根拠</h2><span class="hint" id="detail-name"></span></div>
+      <div id="detail"><p class="placeholder">表の行を選ぶと、PDFの1ページ目と、<br>どの文字を手がかりに判定したかを表示します。</p></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>仕分け後のフォルダ</h2><span class="hint">Googleドライブ上の並び</span></div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+  </section>
+
+  <p class="note">
+    ※ サンプルPDFの会社名・金額はすべて架空です。帳票の見た目も一般的な会計帳票をまねたもので、<br>
+    TKCの実際の帳票とは異なります。実運用では、実際の帳票に合わせて読み取りルールを調整します。
+  </p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="extractor.js"></script>
+<script src="pdftext.js"></script>
+<script>
+(function () {
+  'use strict';
+  var pdfjsLib = window['pdfjs-dist/build/pdf'];
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // デモ用の関与先マスタ(架空)
+  var CLIENTS = [
+    { code: '10001', name: '株式会社さくら建設', aliases: ['さくら建設'], fiscalEndMonth: 3 },
+    { code: '10002', name: '有限会社みなと商店', aliases: ['みなと商店'], fiscalEndMonth: 12 },
+    { code: '10003', name: '合同会社ひかりデザイン', aliases: ['ひかりデザイン'], fiscalEndMonth: 6 },
+    { code: '10004', name: '株式会社あおば食品', aliases: ['あおば食品'], fiscalEndMonth: 9 }
+  ];
+  var SAMPLES = ['scan_0001.pdf', 'scan_0002.pdf', 'scan_0003.pdf', 'scan_0004.pdf', 'scan_0005.pdf', 'scan_0006.pdf', 'scan_0007.pdf'];
+
+  var rows = [];
+  var selectedId = null;
+  var seq = 0;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function yen(n) { return n == null ? '' : (n < 0 ? '△' : '') + Math.abs(n).toLocaleString('ja-JP'); }
+  function jpDate(s) {
+    if (!s) return '';
+    var p = s.split('-');
+    return p[0] + '/' + p[1] + (p[2] ? '/' + p[2] : '');
+  }
+  function periodText(r) {
+    if (!r.periodStart) return '';
+    if (r.period && (r.period.kind === 'year' || r.periodKind === 'year')) return r.periodEnd.slice(0, 4) + '年分';
+    if (r.periodStart.slice(0, 7) === r.periodEnd.slice(0, 7)) return r.periodEnd.slice(0, 4) + '年' + (+r.periodEnd.slice(5, 7)) + '月分';
+    return jpDate(r.periodStart) + '〜' + jpDate(r.periodEnd);
+  }
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2200);
+  }
+
+  function analyze(row) {
+    row.r = TaxDocExtractor.extract(row.text, { clients: $('use-master').checked ? CLIENTS : [] });
+  }
+
+  async function addPdf(name, buffer, isSample) {
+    var row = { id: ++seq, name: name, data: new Uint8Array(buffer), sample: isSample, text: null, r: null, error: null };
+    rows.push(row);
+    render();
+    try {
+      var out = await PdfText.extractText(pdfjsLib, row.data.slice());
+      row.text = out.text;
+      analyze(row);
+    } catch (e) {
+      row.error = 'PDFを開けませんでした(' + e.message + ')';
+    }
+    render();
+    return row;
+  }
+
+  async function loadSamples() {
+    rows = rows.filter(function (r) { return !r.sample; });
+    selectedId = null;
+    render();
+    for (var i = 0; i < SAMPLES.length; i++) {
+      try {
+        var res = await fetch('samples/' + SAMPLES[i]);
+        if (!res.ok) throw new Error(res.status);
+        await addPdf(SAMPLES[i], await res.arrayBuffer(), true);
+      } catch (e) {
+        toast('サンプルを読み込めませんでした:' + SAMPLES[i]);
+      }
+    }
+    var first = rows.filter(function (r) { return r.r; })[0];
+    if (first && selectedId === null) select(first.id);
+  }
+
+  function render() {
+    var done = rows.filter(function (r) { return r.r || r.error; });
+    var ok = done.filter(function (r) { return r.r && r.r.status === 'OK'; }).length;
+    $('s-total').textContent = done.length;
+    $('s-ok').textContent = ok;
+    $('s-warn').textContent = done.length - ok;
+
+    var html = rows.map(function (row, i) {
+      var r = row.r;
+      var cls = row.id === selectedId ? ' class="sel"' : '';
+      var head = '<tr data-id="' + row.id + '"' + cls + '><td class="rownum">' + (i + 2) + '</td>';
+      if (!r) {
+        var st = row.error ? '<span class="pill warn">エラー</span>' : '<span class="pill loading">読み取り中</span>';
+        return head + '<td>' + st + '</td><td colspan="7" class="empty">' + esc(row.error || '') + '</td><td class="file">' + esc(row.name) + '</td></tr>';
+      }
+      var pill = r.status === 'OK' ? '<span class="pill ok">OK</span>' : '<span class="pill warn">要確認</span>';
+      function cell(v, extra) { return '<td class="' + (extra || '') + (v ? '' : ' empty') + '">' + (v ? esc(v) : '―') + '</td>'; }
+      return head + '<td>' + pill + '</td>' +
+        cell(r.docType, 'nowrap') + cell(r.clientCode, 'nowrap') + cell(r.clientName, 'nowrap') +
+        cell(periodText(r), 'nowrap') + cell(jpDate(r.createdDate), 'nowrap') +
+        '<td class="num' + (r.amount == null ? ' empty' : '') + '">' + (r.amount == null ? '―' : esc(yen(r.amount))) + '</td>' +
+        '<td class="file">' + (r.status === 'OK' ? esc(r.suggestedFileName) : '<span style="color:var(--warn)">(要確認フォルダへ)</span>') + '</td>' +
+        '<td class="file">' + esc(row.name) + (row.sample ? '<span class="tag-sample">サンプル</span>' : '') + '</td></tr>';
+    }).join('');
+    $('rows').innerHTML = html || '<tr><td class="rownum">2</td><td colspan="9" class="empty">PDFを入れると、ここに1行ずつ追加されます。</td></tr>';
+    renderTree();
+  }
+
+  function renderTree() {
+    var root = {};
+    rows.forEach(function (row) {
+      if (!row.r && !row.error) return;
+      var path, file;
+      if (row.r && row.r.status === 'OK') { path = row.r.suggestedFolder; file = row.r.suggestedFileName; }
+      else { path = ['_要確認']; file = row.name; }
+      var node = root;
+      path.forEach(function (p) { node[p] = node[p] || {}; node = node[p]; });
+      node['\u0000files'] = (node['\u0000files'] || []).concat(file);
+    });
+    function build(node) {
+      return Object.keys(node).filter(function (k) { return k !== '\u0000files'; }).sort().map(function (k) {
+        var files = (node[k]['\u0000files'] || []).map(function (f) { return '<li class="pdf">' + esc(f) + '</li>'; }).join('');
+        var sub = build(node[k]);
+        return '<li><span class="folder' + (k === '_要確認' ? ' review' : '') + '">' + esc(k) + '</span><ul>' + sub + files + '</ul></li>';
+      }).join('');
+    }
+    var html = build(root);
+    $('tree').innerHTML = html ? '<li><span class="folder">書類保管(保存先フォルダ)</span><ul>' + html + '</ul></li>' : '<li class="placeholder" style="padding:8px 0">まだ書類がありません</li>';
+  }
+
+  async function select(id) {
+    selectedId = id;
+    render();
+    var row = rows.filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+    $('detail-name').textContent = row.name;
+    if (!row.r) { $('detail').innerHTML = '<p class="placeholder">' + esc(row.error || '読み取り中です…') + '</p>'; return; }
+    var r = row.r;
+    var issues = r.issues.length ? '<div class="issues"><b>要確認の理由</b><ul>' + r.issues.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul></div>' : '';
+    $('detail').innerHTML =
+      '<div class="detail-body"><div class="preview" id="preview"><span class="placeholder">表示中…</span></div><div>' +
+      '<dl class="fields">' +
+      '<dt>書類種別</dt><dd>' + esc(r.docType || '―') + (r.docTypeHits.length ? ' <small>手がかり:' + esc(r.docTypeHits.join('、')) + '</small>' : '') + '</dd>' +
+      '<dt>関与先</dt><dd>' + esc((r.clientCode ? r.clientCode + ' ' : '') + (r.clientName || '―')) + (r.clientNameHow ? ' <small>(' + esc(r.clientNameHow) + ')</small>' : '') + '</dd>' +
+      '<dt>対象期間</dt><dd>' + esc(periodText(r) || '―') + (r.term ? ' <small>第' + r.term + '期</small>' : '') + '</dd>' +
+      '<dt>作成日</dt><dd>' + esc(jpDate(r.createdDate) || '―') + '</dd>' +
+      '<dt>金額</dt><dd>' + (r.amount == null ? '―' : esc(r.amountLabel + ' ' + yen(r.amount) + '円')) + '</dd>' +
+      '<dt>新ファイル名</dt><dd>' + esc(r.suggestedFileName) + '</dd>' +
+      '<dt>保存先</dt><dd>' + esc(r.status === 'OK' ? r.suggestedFolder.join(' / ') : '_要確認(人が確認してから移動)') + '</dd>' +
+      '</dl>' + issues +
+      '<details class="raw"><summary>PDFから読み取った文字を見る</summary><pre>' + esc(row.text) + '</pre></details>' +
+      '</div></div>';
+    try {
+      var doc = await pdfjsLib.getDocument({ data: row.data.slice() }).promise;
+      var page = await doc.getPage(1);
+      var vp = page.getViewport({ scale: 1 });
+      var scale = 440 / vp.width;
+      var v2 = page.getViewport({ scale: scale });
+      var canvas = document.createElement('canvas');
+      canvas.width = v2.width; canvas.height = v2.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: v2 }).promise;
+      var box = $('preview');
+      if (box && selectedId === id) { box.innerHTML = ''; box.appendChild(canvas); }
+    } catch (e) {
+      var b = $('preview'); if (b) b.innerHTML = '<span class="placeholder">プレビューを表示できません</span>';
+    }
+  }
+
+  function tsv() {
+    var head = ['ステータス', '書類種別', '関与先コード', '関与先名', '対象期間(開始)', '対象期間(終了)', '作成日', '金額の項目', '金額', '新ファイル名', '保存先フォルダ', '元のファイル名', '確認メモ'];
+    var lines = rows.filter(function (r) { return r.r; }).map(function (row) {
+      var r = row.r;
+      return [r.status, r.docType, r.clientCode, r.clientName, r.periodStart, r.periodEnd, r.createdDate,
+        r.amountLabel, r.amount == null ? '' : r.amount, r.suggestedFileName,
+        r.status === 'OK' ? r.suggestedFolder.join('/') : '_要確認', row.name, r.issues.join(' / ')]
+        .map(function (v) { return String(v).replace(/[\t\n]/g, ' '); }).join('\t');
+    });
+    return [head.join('\t')].concat(lines).join('\n');
+  }
+
+  // ---- イベント ----
+  $('rows').addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-id]');
+    if (tr) select(+tr.getAttribute('data-id'));
+  });
+  $('file').addEventListener('change', async function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    for (var i = 0; i < files.length; i++) {
+      var row = await addPdf(files[i].name, await files[i].arrayBuffer(), false);
+      if (i === 0) select(row.id);
+    }
+    e.target.value = '';
+  });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', async function (e) {
+    var files = Array.prototype.slice.call(e.dataTransfer.files || []).filter(function (f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
+    if (!files.length) { toast('PDFファイルを入れてください'); return; }
+    for (var i = 0; i < files.length; i++) {
+      var row = await addPdf(files[i].name, await files[i].arrayBuffer(), false);
+      if (i === 0) select(row.id);
+    }
+  });
+  $('btn-sample').addEventListener('click', loadSamples);
+  $('btn-clear').addEventListener('click', function () {
+    rows = []; selectedId = null; render();
+    $('detail').innerHTML = '<p class="placeholder">表の行を選ぶと、読み取りの根拠を表示します。</p>';
+    $('detail-name').textContent = '';
+  });
+  $('use-master').addEventListener('change', function () {
+    rows.forEach(function (row) { if (row.text) analyze(row); });
+    if (selectedId !== null) select(selectedId); else render();
+  });
+  $('btn-copy').addEventListener('click', function () {
+    var text = tsv();
+    var fallback = function () {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('コピーしました。スプレッドシートに貼り付けできます'); }
+      catch (e) { toast('コピーできませんでした'); }
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('コピーしました。スプレッドシートに貼り付けできます'); }, fallback);
+    } else { fallback(); }
+  });
+
+  render();
+  loadSamples(); // 開いた時点でサンプルを読み取った状態にする
+})();
+</script>
