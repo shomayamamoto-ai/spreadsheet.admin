@@ -183,6 +183,66 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
   .preview { max-width: 260px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---- 改良版で追加した部品 ---- */
+.summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat.dup strong { color: var(--err); }
+.pill.done { background: var(--accent); color: var(--accent-ink); }
+.pill.dup { background: var(--warn-soft); color: var(--err); }
+.pill.excluded { background: var(--head); color: var(--muted); }
+tr.excluded td:not(.rownum) { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--rule-strong); }
+.sheet td.changed { box-shadow: inset 3px 0 0 var(--accent); }
+
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab {
+  border: 1px solid var(--rule); background: var(--paper); color: var(--muted); font-weight: 700;
+  border-radius: 4px 4px 0 0; padding: 6px 14px; font-size: 13.5px;
+}
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); border-color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; border-bottom: 1px solid var(--rule); align-items: center; }
+.filters label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+select, input[type="text"], input[type="date"], input[type="number"] {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule-strong); border-radius: 4px; padding: 4px 8px; max-width: 100%;
+}
+input[type="text"] { width: 12em; }
+input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.filters .count { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+
+.edit { margin-top: 12px; border: 1px solid var(--accent); border-radius: 4px; padding: 12px; background: var(--accent-soft); display: grid; gap: 10px; }
+.edit h3 { margin: 0; font-size: 13.5px; }
+.edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.edit-grid label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); min-width: 0; }
+.edit-grid select, .edit-grid input { width: 100%; }
+.edit .preview-name { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.status-grid th, .status-grid td { text-align: center; }
+.status-grid td:first-child, .status-grid th:first-child { text-align: left; white-space: nowrap; }
+.status-grid td.has { color: var(--accent); font-weight: 700; }
+.status-grid td.has small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.status-grid td.none { color: var(--muted); font-size: 12px; }
+.status-grid table.sheet { min-width: 860px; }
+.status-note { padding: 10px 14px; margin: 0; font-size: 12.5px; color: var(--muted); }
+
+.calc { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; padding: 14px; align-items: center; }
+.calc-inputs { display: grid; gap: 8px; }
+.calc-inputs label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 13px; }
+.calc-out { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.calc-out div { border-left: 3px solid var(--accent); padding: 4px 10px; }
+.calc-out em { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
+.calc-out strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.calc-out small { font-size: 13px; margin-left: 2px; }
+
+@media (max-width: 900px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calc { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .edit-grid { grid-template-columns: minmax(0, 1fr); }
+  .filters .count { margin-left: 0; }
+}
 </style>
 
 <div class="wrap">
@@ -190,15 +250,15 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
     <div>
       <h1>PDF仕分けアシスタント</h1>
       <p>保存フォルダに放り込まれた書類PDFを読み取り、<br>
-        書類種別・関与先・対象期間ごとにスプレッドシートへ整理します。</p>
+        書類種別・顧問先・対象期間ごとにスプレッドシートへ整理します。</p>
     </div>
     <span class="badge-demo">提案用デモ・架空データ</span>
   </header>
 
   <section class="flow" aria-label="処理の流れ">
-    <div class="step"><b>STEP 1</b><span>PDFを入れる</span><small>TKCで作成した書類をPDFにして、<br>いつもの受付フォルダへ保存するだけ。</small></div>
-    <div class="step"><b>STEP 2</b><span>中身を読み取る</span><small>書類種別・関与先コード・期間・金額を<br>自動で拾い、一覧表に1行ずつ記録。</small></div>
-    <div class="step"><b>STEP 3</b><span>名前を付けて仕分け</span><small>「関与先/年度/書類種別」のフォルダへ移動。<br>自信がないものは「要確認」に。</small></div>
+    <div class="step"><b>STEP 1</b><span>PDFを入れる</span><small>作成した書類をPDFにして、<br>いつもの受付フォルダへ保存するだけ。</small></div>
+    <div class="step"><b>STEP 2</b><span>中身を読み取る</span><small>書類種別・顧問先コード・期間・金額を<br>自動で拾い、一覧表に1行ずつ記録。</small></div>
+    <div class="step"><b>STEP 3</b><span>名前を付けて仕分け</span><small>「顧問先/年度/書類種別」のフォルダへ移動。<br>迷うものや重複は、人が確認してから確定。</small></div>
   </section>
 
   <section class="controls">
@@ -207,40 +267,59 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
         <small>読み取りはこのブラウザの中だけで行い、<br>PDFをサーバーへ送信しません。</small></p>
       <div class="btns">
         <label class="filebtn" for="file">PDFを選ぶ<input id="file" type="file" accept="application/pdf,.pdf" multiple></label>
-        <button id="btn-sample" type="button">サンプル7件を読み直す</button>
+        <button id="btn-sample" type="button">サンプル9件を読み直す</button>
         <button id="btn-clear" type="button">表を空にする</button>
       </div>
     </div>
     <div class="summary" aria-live="polite">
       <div class="stat"><em>読み取った件数</em><strong id="s-total">0</strong></div>
-      <div class="stat ok"><em>自動で仕分け</em><strong id="s-ok">0</strong></div>
+      <div class="stat ok"><em>仕分け済み</em><strong id="s-ok">0</strong></div>
       <div class="stat warn"><em>要確認</em><strong id="s-warn">0</strong></div>
-      <label class="master-toggle" for="use-master"><input id="use-master" type="checkbox" checked> 関与先マスタ(4社)と照合して、名前の表記ゆれをそろえる</label>
+      <div class="stat dup"><em>重複の疑い</em><strong id="s-dup">0</strong></div>
+      <label class="master-toggle" for="use-master"><input id="use-master" type="checkbox" checked> 顧問先マスタ(4社)と照合して、名前の表記ゆれをそろえる</label>
     </div>
   </section>
 
   <section class="panel">
     <div class="panel-head">
-      <h2>書類一覧(Googleスプレッドシートに書き込まれる内容)</h2>
-      <div class="btns">
-        <span class="hint">行をクリックすると、読み取りの根拠が見られます</span>
-        <button id="btn-copy" type="button" class="primary">表をコピー(スプシに貼り付け可)</button>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-list" aria-selected="true" aria-controls="view-list" type="button">書類一覧</button>
+        <button class="tab" role="tab" id="tab-status" aria-selected="false" aria-controls="view-status" type="button">顧問先ごとの保存状況</button>
+      </div>
+      <button id="btn-copy" type="button" class="primary">表をコピー(スプシに貼り付け可)</button>
+    </div>
+
+    <div id="view-list" role="tabpanel" aria-labelledby="tab-list">
+      <div class="filters">
+        <label for="f-client">顧問先 <select id="f-client"><option value="">すべて</option></select></label>
+        <label for="f-type">書類種別 <select id="f-type"><option value="">すべて</option></select></label>
+        <label for="f-status">ステータス <select id="f-status">
+          <option value="">すべて</option><option value="todo">要確認・重複のみ</option><option value="done">仕分け済みのみ</option>
+        </select></label>
+        <label for="f-text">検索 <input id="f-text" type="text" placeholder="ファイル名・会社名"></label>
+        <span class="count" id="f-count"></span>
+      </div>
+      <div class="sheet-scroll">
+        <table class="sheet" id="sheet">
+          <thead>
+            <tr class="letters"><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th></tr>
+            <tr class="names"><th class="rownum">1</th><th>ステータス</th><th>書類種別</th><th>顧問先コード</th><th>顧問先名</th><th>対象期間</th><th>作成日</th><th>金額</th><th>新ファイル名</th><th>元のファイル名</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
       </div>
     </div>
-    <div class="sheet-scroll">
-      <table class="sheet" id="sheet">
-        <thead>
-          <tr class="letters"><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th></tr>
-          <tr class="names"><th class="rownum">1</th><th>ステータス</th><th>書類種別</th><th>関与先コード</th><th>関与先名</th><th>対象期間</th><th>作成日</th><th>金額</th><th>新ファイル名</th><th>元のファイル名</th></tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
+
+    <div id="view-status" role="tabpanel" aria-labelledby="tab-status" hidden>
+      <p class="status-note">顧問先ごとに、どの書類が保存済みかを一覧にしたものです。<br>
+        「未保存」の欄を見れば、作成漏れや保存漏れに気づけます(マスタに登録された顧問先が対象)。</p>
+      <div class="sheet-scroll status-grid"><table class="sheet" id="status-table"></table></div>
     </div>
   </section>
 
   <section class="lower">
     <div class="panel">
-      <div class="panel-head"><h2>読み取りの根拠</h2><span class="hint" id="detail-name"></span></div>
+      <div class="panel-head"><h2>読み取りの根拠と手直し</h2><span class="hint" id="detail-name"></span></div>
       <div id="detail"><p class="placeholder">表の行を選ぶと、PDFの1ページ目と、<br>どの文字を手がかりに判定したかを表示します。</p></div>
     </div>
     <div class="panel">
@@ -249,57 +328,134 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
     </div>
   </section>
 
+  <section class="panel" aria-labelledby="calc-title">
+    <div class="panel-head"><h2 id="calc-title">効果の試算</h2><span class="hint">数字を事務所の実績に置き換えてお使いください</span></div>
+    <div class="calc">
+      <div class="calc-inputs">
+        <label for="c-count">月に保存するPDFの件数 <span><input id="c-count" type="number" min="0" step="10" value="300"> 件</span></label>
+        <label for="c-min">1件あたりの仕分け時間(今) <span><input id="c-min" type="number" min="0" step="0.5" value="1"> 分</span></label>
+        <label for="c-rate">自動で仕分けできる割合 <span><input id="c-rate" type="number" min="0" max="100" step="5" value="80"> %</span></label>
+        <label for="c-check">要確認1件の確認時間 <span><input id="c-check" type="number" min="0" step="0.5" value="1"> 分</span></label>
+      </div>
+      <div class="calc-out" aria-live="polite">
+        <div><em>今の仕分け時間</em><strong id="o-before">0</strong><small>時間/月</small></div>
+        <div><em>導入後の確認時間</em><strong id="o-after">0</strong><small>時間/月</small></div>
+        <div><em>削減できる時間</em><strong id="o-save">0</strong><small>時間/月</small></div>
+        <div><em>年間にすると</em><strong id="o-year">0</strong><small>時間/年</small></div>
+      </div>
+    </div>
+    <p class="status-note" style="padding-top:0">※ 初期値は仮の数字です。「自動で仕分けできる割合」は、実際のPDFで試験運用して測った値を入れてください。</p>
+  </section>
+
   <p class="note">
-    ※ サンプルPDFの会社名・金額はすべて架空です。帳票の見た目も一般的な会計帳票をまねたもので、<br>
-    TKCの実際の帳票とは異なります。実運用では、実際の帳票に合わせて読み取りルールを調整します。
+    ※ サンプルPDFの会社名・金額はすべて架空です。帳票の見た目も一般的な会計帳票をまねたものです。<br>
+    実運用では、事務所で実際に使っている帳票に合わせて、読み取りルールを調整します。
   </p>
 </div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- 読み取り処理をページ内で動かすため、worker 本体も通常のスクリプトとして読み込む(別ドメインのWorkerが使えない環境への対策) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <script src="extractor.js"></script>
 <script src="pdftext.js"></script>
 <script>
 (function () {
   'use strict';
   var pdfjsLib = window['pdfjs-dist/build/pdf'];
+  if (!pdfjsLib) {
+    document.getElementById('rows').innerHTML = '<tr><td class="rownum">2</td><td colspan="9">PDFを読む部品を読み込めませんでした。ネットワークを確認して、ページを再読み込みしてください。</td></tr>';
+    return;
+  }
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  // デモ用の関与先マスタ(架空)
+  // デモ用の顧問先マスタ(架空)
   var CLIENTS = [
     { code: '10001', name: '株式会社さくら建設', aliases: ['さくら建設'], fiscalEndMonth: 3 },
     { code: '10002', name: '有限会社みなと商店', aliases: ['みなと商店'], fiscalEndMonth: 12 },
     { code: '10003', name: '合同会社ひかりデザイン', aliases: ['ひかりデザイン'], fiscalEndMonth: 6 },
     { code: '10004', name: '株式会社あおば食品', aliases: ['あおば食品'], fiscalEndMonth: 9 }
   ];
-  var SAMPLES = ['scan_0001.pdf', 'scan_0002.pdf', 'scan_0003.pdf', 'scan_0004.pdf', 'scan_0005.pdf', 'scan_0006.pdf', 'scan_0007.pdf'];
+  var SAMPLES = [];
+  for (var s = 1; s <= 9; s++) SAMPLES.push('scan_000' + s + '.pdf');
+  var DOC_TYPE_NAMES = TaxDocExtractor.DOC_TYPES.map(function (d) { return d.name; });
 
   var rows = [];
   var selectedId = null;
   var seq = 0;
   var $ = function (id) { return document.getElementById(id); };
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+  // ---------- 表示用の小道具 ----------
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
   function yen(n) { return n == null ? '' : (n < 0 ? '△' : '') + Math.abs(n).toLocaleString('ja-JP'); }
-  function jpDate(s) {
-    if (!s) return '';
-    var p = s.split('-');
+  function jpDate(v) {
+    if (!v) return '';
+    var p = v.split('-');
     return p[0] + '/' + p[1] + (p[2] ? '/' + p[2] : '');
   }
   function periodText(r) {
-    if (!r.periodStart) return '';
-    if (r.period && (r.period.kind === 'year' || r.periodKind === 'year')) return r.periodEnd.slice(0, 4) + '年分';
+    if (!r.periodStart || !r.periodEnd) return '';
+    if (r.periodKind === 'year') return r.periodEnd.slice(0, 4) + '年分';
     if (r.periodStart.slice(0, 7) === r.periodEnd.slice(0, 7)) return r.periodEnd.slice(0, 4) + '年' + (+r.periodEnd.slice(5, 7)) + '月分';
     return jpDate(r.periodStart) + '〜' + jpDate(r.periodEnd);
+  }
+  // 保存状況の表などで使う短い表記(事業年度は「2025年3月期」)
+  function shortPeriod(r) {
+    if (r.periodKind !== 'month' && r.periodKind !== 'year' && r.periodEnd && r.periodStart && r.periodStart.slice(0, 7) !== r.periodEnd.slice(0, 7)) {
+      return r.periodEnd.slice(0, 4) + '年' + (+r.periodEnd.slice(5, 7)) + '月期';
+    }
+    return periodText(r);
   }
   function toast(msg) {
     var t = $('toast');
     t.textContent = msg; t.hidden = false;
-    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2200);
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2400);
+  }
+  function clientByCode(code) {
+    return CLIENTS.filter(function (c) { return c.code === String(code); })[0] || null;
+  }
+
+  // ---------- 1行分の「最終的な値」を作る ----------
+  // 自動の読み取り結果(row.r)に、人の手直し(row.fix)と重複判定を重ねる
+  function view(row) {
+    if (!row.r) return null;
+    var v = Object.assign({}, row.r, { issues: row.r.issues.slice() });
+    if (row.fix) {
+      Object.assign(v, row.fix);
+      var dt = TaxDocExtractor.DOC_TYPES.filter(function (d) { return d.name === v.docType; })[0];
+      v.periodKind = dt ? dt.periodKind : v.periodKind;
+      var names = TaxDocExtractor.suggestNames(row.fix, clientByCode(row.fix.clientCode));
+      v.suggestedFileName = names.fileName;
+      v.suggestedFolder = names.folder;
+      v.status = '確定済み';
+      v.issues = [];
+    }
+    if (row.excluded) { v.status = '除外'; }
+    else if (row.dupOf) {
+      v.status = '重複の疑い';
+      v.issues.push('同じ顧問先・書類種別・期間の書類が、' + row.dupOf.rowNo + '行目にあります');
+    }
+    v.placed = v.status === 'OK' || v.status === '確定済み';
+    return v;
+  }
+
+  // 重複チェック:上の行から順に、同じキーが既にあれば「重複の疑い」
+  function markDuplicates() {
+    var seen = {};
+    rows.forEach(function (row, i) {
+      row.rowNo = i + 2;
+      row.dupOf = null;
+      if (!row.r || row.excluded) return;
+      var base = row.fix ? Object.assign({}, row.r, row.fix) : row.r;
+      var key = TaxDocExtractor.docKey(base);
+      if (!key) return;
+      if (seen[key] && !row.dupIgnored) row.dupOf = seen[key];
+      else if (!seen[key]) seen[key] = row;
+    });
   }
 
   function analyze(row) {
@@ -311,8 +467,7 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
     rows.push(row);
     render();
     try {
-      var out = await PdfText.extractText(pdfjsLib, row.data.slice());
-      row.text = out.text;
+      row.text = (await PdfText.extractText(pdfjsLib, row.data.slice())).text;
       analyze(row);
     } catch (e) {
       row.error = 'PDFを開けませんでした(' + e.message + ')';
@@ -334,45 +489,90 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
         toast('サンプルを読み込めませんでした:' + SAMPLES[i]);
       }
     }
-    var first = rows.filter(function (r) { return r.r; })[0];
+    // 最初は「要確認」の行を選んでおき、手直しの流れが見えるようにする
+    var firstTodo = rows.filter(function (r) { var v = view(r); return v && !v.placed && v.status !== '除外'; })[0];
+    var first = firstTodo || rows.filter(function (r) { return r.r; })[0];
     if (first && selectedId === null) select(first.id);
   }
 
-  function render() {
-    var done = rows.filter(function (r) { return r.r || r.error; });
-    var ok = done.filter(function (r) { return r.r && r.r.status === 'OK'; }).length;
-    $('s-total').textContent = done.length;
-    $('s-ok').textContent = ok;
-    $('s-warn').textContent = done.length - ok;
+  // ---------- 描画 ----------
+  function pill(status) {
+    var cls = { 'OK': 'ok', '確定済み': 'done', '要確認': 'warn', '重複の疑い': 'dup', '除外': 'excluded' }[status] || 'warn';
+    return '<span class="pill ' + cls + '">' + esc(status) + '</span>';
+  }
 
-    var html = rows.map(function (row, i) {
-      var r = row.r;
-      var cls = row.id === selectedId ? ' class="sel"' : '';
-      var head = '<tr data-id="' + row.id + '"' + cls + '><td class="rownum">' + (i + 2) + '</td>';
-      if (!r) {
+  function render() {
+    markDuplicates();
+    var views = rows.map(function (r) { return { row: r, v: view(r) }; });
+    var done = views.filter(function (x) { return x.v || x.row.error; });
+    $('s-total').textContent = done.length;
+    $('s-ok').textContent = done.filter(function (x) { return x.v && x.v.placed; }).length;
+    $('s-warn').textContent = done.filter(function (x) { return !x.v || x.v.status === '要確認'; }).length;
+    $('s-dup').textContent = done.filter(function (x) { return x.v && x.v.status === '重複の疑い'; }).length;
+
+    renderFilters(views);
+    var fc = $('f-client').value, ft = $('f-type').value, fs = $('f-status').value, fx = $('f-text').value.trim();
+    var shown = 0;
+    var html = views.map(function (x) {
+      var row = x.row, v = x.v;
+      if (v) {
+        if (fc && v.clientName !== fc) return '';
+        if (ft && v.docType !== ft) return '';
+        if (fs === 'todo' && (v.placed || v.status === '除外')) return '';
+        if (fs === 'done' && !v.placed) return '';
+        if (fx && (row.name + v.clientName + v.suggestedFileName + v.docType).indexOf(fx) < 0) return '';
+      } else if (fc || ft || fs === 'done' || fx) return '';
+      shown++;
+      var cls = [row.id === selectedId ? 'sel' : '', v && v.status === '除外' ? 'excluded' : ''].join(' ').trim();
+      var head = '<tr data-id="' + row.id + '"' + (cls ? ' class="' + cls + '"' : '') + '><td class="rownum">' + row.rowNo + '</td>';
+      if (!v) {
         var st = row.error ? '<span class="pill warn">エラー</span>' : '<span class="pill loading">読み取り中</span>';
         return head + '<td>' + st + '</td><td colspan="7" class="empty">' + esc(row.error || '') + '</td><td class="file">' + esc(row.name) + '</td></tr>';
       }
-      var pill = r.status === 'OK' ? '<span class="pill ok">OK</span>' : '<span class="pill warn">要確認</span>';
-      function cell(v, extra) { return '<td class="' + (extra || '') + (v ? '' : ' empty') + '">' + (v ? esc(v) : '―') + '</td>'; }
-      return head + '<td>' + pill + '</td>' +
-        cell(r.docType, 'nowrap') + cell(r.clientCode, 'nowrap') + cell(r.clientName, 'nowrap') +
-        cell(periodText(r), 'nowrap') + cell(jpDate(r.createdDate), 'nowrap') +
-        '<td class="num' + (r.amount == null ? ' empty' : '') + '">' + (r.amount == null ? '―' : esc(yen(r.amount))) + '</td>' +
-        '<td class="file">' + (r.status === 'OK' ? esc(r.suggestedFileName) : '<span style="color:var(--warn)">(要確認フォルダへ)</span>') + '</td>' +
+      var fixed = row.fix ? ' changed' : '';
+      function cell(val, extra) { return '<td class="' + (extra || '') + (val ? '' : ' empty') + '">' + (val ? esc(val) : '―') + '</td>'; }
+      var target = v.placed ? esc(v.suggestedFileName)
+        : '<span style="color:var(--warn)">(' + (v.status === '除外' ? '重複のため除外' : '要確認フォルダへ') + ')</span>';
+      return head + '<td>' + pill(v.status) + '</td>' +
+        cell(v.docType, 'nowrap' + fixed) + cell(v.clientCode, 'nowrap' + fixed) + cell(v.clientName, 'nowrap' + fixed) +
+        cell(periodText(v), 'nowrap' + fixed) + cell(jpDate(v.createdDate), 'nowrap') +
+        '<td class="num' + (v.amount == null ? ' empty' : '') + '">' + (v.amount == null ? '―' : esc(yen(v.amount))) + '</td>' +
+        '<td class="file">' + target + '</td>' +
         '<td class="file">' + esc(row.name) + (row.sample ? '<span class="tag-sample">サンプル</span>' : '') + '</td></tr>';
     }).join('');
-    $('rows').innerHTML = html || '<tr><td class="rownum">2</td><td colspan="9" class="empty">PDFを入れると、ここに1行ずつ追加されます。</td></tr>';
-    renderTree();
+    $('rows').innerHTML = html || '<tr><td class="rownum">2</td><td colspan="9" class="empty">' +
+      (rows.length ? '条件に合う書類はありません。' : 'PDFを入れると、ここに1行ずつ追加されます。') + '</td></tr>';
+    $('f-count').textContent = rows.length ? shown + ' / ' + rows.length + ' 件を表示' : '';
+    renderTree(views);
+    renderStatus(views);
+    renderCalcRate(views);
   }
 
-  function renderTree() {
+  function renderFilters(views) {
+    function fill(sel, values) {
+      var cur = sel.value;
+      var opts = ['<option value="">すべて</option>'].concat(values.map(function (x) { return '<option>' + esc(x) + '</option>'; }));
+      sel.innerHTML = opts.join('');
+      sel.value = values.indexOf(cur) >= 0 ? cur : '';
+    }
+    var clients = [], types = [];
+    views.forEach(function (x) {
+      if (!x.v) return;
+      if (x.v.clientName && clients.indexOf(x.v.clientName) < 0) clients.push(x.v.clientName);
+      if (x.v.docType && types.indexOf(x.v.docType) < 0) types.push(x.v.docType);
+    });
+    fill($('f-client'), clients.sort());
+    fill($('f-type'), DOC_TYPE_NAMES.filter(function (t) { return types.indexOf(t) >= 0; }));
+  }
+
+  function renderTree(views) {
     var root = {};
-    rows.forEach(function (row) {
-      if (!row.r && !row.error) return;
+    views.forEach(function (x) {
+      if (!x.v && !x.row.error) return;
       var path, file;
-      if (row.r && row.r.status === 'OK') { path = row.r.suggestedFolder; file = row.r.suggestedFileName; }
-      else { path = ['_要確認']; file = row.name; }
+      if (x.v && x.v.placed) { path = x.v.suggestedFolder; file = x.v.suggestedFileName; }
+      else if (x.v && x.v.status === '除外') { path = ['_重複(削除候補)']; file = x.row.name; }
+      else { path = ['_要確認']; file = x.row.name; }
       var node = root;
       path.forEach(function (p) { node[p] = node[p] || {}; node = node[p]; });
       node['\u0000files'] = (node['\u0000files'] || []).concat(file);
@@ -380,42 +580,131 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
     function build(node) {
       return Object.keys(node).filter(function (k) { return k !== '\u0000files'; }).sort().map(function (k) {
         var files = (node[k]['\u0000files'] || []).map(function (f) { return '<li class="pdf">' + esc(f) + '</li>'; }).join('');
-        var sub = build(node[k]);
-        return '<li><span class="folder' + (k === '_要確認' ? ' review' : '') + '">' + esc(k) + '</span><ul>' + sub + files + '</ul></li>';
+        return '<li><span class="folder' + (k.charAt(0) === '_' ? ' review' : '') + '">' + esc(k) + '</span><ul>' + build(node[k]) + files + '</ul></li>';
       }).join('');
     }
     var html = build(root);
-    $('tree').innerHTML = html ? '<li><span class="folder">書類保管(保存先フォルダ)</span><ul>' + html + '</ul></li>' : '<li class="placeholder" style="padding:8px 0">まだ書類がありません</li>';
+    $('tree').innerHTML = html ? '<li><span class="folder">書類保管(保存先フォルダ)</span><ul>' + html + '</ul></li>'
+      : '<li class="placeholder" style="padding:8px 0">まだ書類がありません</li>';
   }
 
+  // 顧問先 × 書類種別の保存状況
+  function renderStatus(views) {
+    var types = DOC_TYPE_NAMES.filter(function (t) { return t !== '総勘定元帳' && t !== '請求書'; });
+    var head = '<thead><tr class="names"><th>顧問先</th>' + types.map(function (t) { return '<th>' + esc(t) + '</th>'; }).join('') + '</tr></thead>';
+    var body = CLIENTS.map(function (c) {
+      var cells = types.map(function (t) {
+        var hits = views.filter(function (x) { return x.v && x.v.placed && x.v.clientCode === c.code && x.v.docType === t; })
+          .map(function (x) { return x.v; })
+          .sort(function (a, b) { return a.periodEnd < b.periodEnd ? 1 : -1; });
+        if (!hits.length) return '<td class="none">未保存</td>';
+        return '<td class="has">' + hits.length + '件<small>最新 ' + esc(shortPeriod(hits[0])) + '</small></td>';
+      }).join('');
+      return '<tr><td>' + esc(c.code + ' ' + c.name) + '<br><small style="color:var(--muted)">決算 ' + c.fiscalEndMonth + '月</small></td>' + cells + '</tr>';
+    }).join('');
+    $('status-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+  }
+
+  // ---------- 詳細と手直し ----------
   async function select(id) {
     selectedId = id;
     render();
     var row = rows.filter(function (r) { return r.id === id; })[0];
     if (!row) return;
     $('detail-name').textContent = row.name;
-    if (!row.r) { $('detail').innerHTML = '<p class="placeholder">' + esc(row.error || '読み取り中です…') + '</p>'; return; }
+    var v = view(row);
+    if (!v) { $('detail').innerHTML = '<p class="placeholder">' + esc(row.error || '読み取り中です…') + '</p>'; return; }
     var r = row.r;
-    var issues = r.issues.length ? '<div class="issues"><b>要確認の理由</b><ul>' + r.issues.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul></div>' : '';
+    var issues = v.issues.length ? '<div class="issues"><b>確認が必要な理由</b><ul>' + v.issues.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '';
+
+    var actions = '';
+    if (v.status === '重複の疑い') {
+      actions = '<div class="row-actions"><button type="button" class="primary" data-act="exclude">重複として除外する</button>' +
+        '<button type="button" data-act="keep">別の書類なので残す</button></div>';
+    } else if (v.status === '除外') {
+      actions = '<div class="row-actions"><button type="button" data-act="unexclude">除外を取り消す</button></div>';
+    }
+    var editOpen = v.status === '要確認';
+    var edit = v.status === '除外' || v.status === '重複の疑い' ? '' : editForm(row, v, editOpen);
+
     $('detail').innerHTML =
       '<div class="detail-body"><div class="preview" id="preview"><span class="placeholder">表示中…</span></div><div>' +
       '<dl class="fields">' +
-      '<dt>書類種別</dt><dd>' + esc(r.docType || '―') + (r.docTypeHits.length ? ' <small>手がかり:' + esc(r.docTypeHits.join('、')) + '</small>' : '') + '</dd>' +
-      '<dt>関与先</dt><dd>' + esc((r.clientCode ? r.clientCode + ' ' : '') + (r.clientName || '―')) + (r.clientNameHow ? ' <small>(' + esc(r.clientNameHow) + ')</small>' : '') + '</dd>' +
-      '<dt>対象期間</dt><dd>' + esc(periodText(r) || '―') + (r.term ? ' <small>第' + r.term + '期</small>' : '') + '</dd>' +
-      '<dt>作成日</dt><dd>' + esc(jpDate(r.createdDate) || '―') + '</dd>' +
-      '<dt>金額</dt><dd>' + (r.amount == null ? '―' : esc(r.amountLabel + ' ' + yen(r.amount) + '円')) + '</dd>' +
-      '<dt>新ファイル名</dt><dd>' + esc(r.suggestedFileName) + '</dd>' +
-      '<dt>保存先</dt><dd>' + esc(r.status === 'OK' ? r.suggestedFolder.join(' / ') : '_要確認(人が確認してから移動)') + '</dd>' +
-      '</dl>' + issues +
+      '<dt>状態</dt><dd>' + pill(v.status) + (row.fix ? ' <small>人が手直しした値です</small>' : '') + '</dd>' +
+      '<dt>書類種別</dt><dd>' + esc(v.docType || '―') + (r.docTypeHits.length && !row.fix ? ' <small>手がかり:' + esc(r.docTypeHits.join('、')) + '</small>' : '') + '</dd>' +
+      '<dt>顧問先</dt><dd>' + esc((v.clientCode ? v.clientCode + ' ' : '') + (v.clientName || '―')) + (r.clientNameHow && !row.fix ? ' <small>(' + esc(r.clientNameHow) + ')</small>' : '') + '</dd>' +
+      '<dt>対象期間</dt><dd>' + esc(periodText(v) || '―') + (v.term ? ' <small>第' + v.term + '期</small>' : '') + '</dd>' +
+      '<dt>作成日</dt><dd>' + esc(jpDate(v.createdDate) || '―') + '</dd>' +
+      '<dt>金額</dt><dd>' + (v.amount == null ? '―' : esc(v.amountLabel + ' ' + yen(v.amount) + '円')) + '</dd>' +
+      '<dt>新ファイル名</dt><dd>' + esc(v.placed ? v.suggestedFileName : '(確定後に付きます)') + '</dd>' +
+      '<dt>保存先</dt><dd>' + esc(v.placed ? v.suggestedFolder.join(' / ') : v.status === '除外' ? '_重複(削除候補)' : '_要確認(人が確認してから移動)') + '</dd>' +
+      '</dl>' + issues + actions + edit +
       '<details class="raw"><summary>PDFから読み取った文字を見る</summary><pre>' + esc(row.text) + '</pre></details>' +
       '</div></div>';
+    bindDetail(row);
+    drawPreview(row, id);
+  }
+
+  function editForm(row, v, open) {
+    var typeOpts = DOC_TYPE_NAMES.map(function (t) { return '<option' + (t === v.docType ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('');
+    var clientOpts = '<option value="">選んでください</option>' + CLIENTS.map(function (c) {
+      return '<option value="' + c.code + '"' + (c.code === v.clientCode ? ' selected' : '') + '>' + esc(c.code + ' ' + c.name) + '</option>';
+    }).join('');
+    var body =
+      '<div class="edit-grid">' +
+      '<label for="ed-type">書類種別<select id="ed-type"><option value="">選んでください</option>' + typeOpts + '</select></label>' +
+      '<label for="ed-client">顧問先<select id="ed-client">' + clientOpts + '</select></label>' +
+      '<label for="ed-start">対象期間(開始)<input id="ed-start" type="date" value="' + esc(v.periodStart) + '"></label>' +
+      '<label for="ed-end">対象期間(終了)<input id="ed-end" type="date" value="' + esc(v.periodEnd) + '"></label>' +
+      '</div>' +
+      '<div>付く名前:<span class="preview-name" id="ed-name">―</span></div>' +
+      '<div class="btns"><button type="button" class="primary" id="ed-save">この内容で確定して仕分け</button>' +
+      (row.fix ? '<button type="button" id="ed-reset">手直しを取り消す</button>' : '') + '</div>';
+    if (open) return '<div class="edit"><h3>内容を直して確定する</h3>' + body + '</div>';
+    return '<details class="raw"><summary>読み取り結果を手直しする</summary><div class="edit">' + body + '</div></details>';
+  }
+
+  function readForm() {
+    var code = $('ed-client').value;
+    var c = clientByCode(code);
+    return { docType: $('ed-type').value, clientCode: code, clientName: c ? c.name : '', periodStart: $('ed-start').value, periodEnd: $('ed-end').value };
+  }
+
+  function bindDetail(row) {
+    document.querySelectorAll('#detail [data-act]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var act = b.getAttribute('data-act');
+        if (act === 'exclude') { row.excluded = true; toast('重複として除外しました(削除候補フォルダへ)'); }
+        if (act === 'unexclude') { row.excluded = false; }
+        if (act === 'keep') { row.dupIgnored = true; toast('別の書類として残しました'); }
+        select(row.id);
+      });
+    });
+    if (!$('ed-save')) return;
+    var update = function () {
+      var f = readForm();
+      $('ed-name').textContent = f.docType && f.clientCode && f.periodEnd
+        ? TaxDocExtractor.suggestNames(f, clientByCode(f.clientCode)).fileName : '書類種別・顧問先・対象期間(終了)を入れてください';
+    };
+    ['ed-type', 'ed-client', 'ed-start', 'ed-end'].forEach(function (id) { $(id).addEventListener('change', update); });
+    update();
+    $('ed-save').addEventListener('click', function () {
+      var f = readForm();
+      if (!f.docType || !f.clientCode || !f.periodEnd) { toast('書類種別・顧問先・対象期間(終了)を入れてください'); return; }
+      if (f.periodStart && f.periodStart > f.periodEnd) { toast('対象期間の開始が、終了より後になっています'); return; }
+      row.fix = f;
+      toast('確定しました。フォルダへ仕分けます');
+      select(row.id);
+    });
+    if ($('ed-reset')) $('ed-reset').addEventListener('click', function () { row.fix = null; select(row.id); });
+  }
+
+  async function drawPreview(row, id) {
     try {
       var doc = await pdfjsLib.getDocument({ data: row.data.slice() }).promise;
       var page = await doc.getPage(1);
       var vp = page.getViewport({ scale: 1 });
-      var scale = 440 / vp.width;
-      var v2 = page.getViewport({ scale: scale });
+      var v2 = page.getViewport({ scale: 440 / vp.width });
       var canvas = document.createElement('canvas');
       canvas.width = v2.width; canvas.height = v2.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: v2 }).promise;
@@ -426,41 +715,82 @@ details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); b
     }
   }
 
+  // ---------- 効果の試算 ----------
+  var rateTouched = false;
+  function renderCalcRate(views) {
+    // 試算の「自動で仕分けできる割合」は、利用者が触るまではデモの結果を初期値にする
+    if (rateTouched) return calc();
+    var done = views.filter(function (x) { return x.v && x.v.status !== '除外'; });
+    if (done.length) {
+      var auto = done.filter(function (x) { return x.v.status === 'OK'; }).length;
+      $('c-rate').value = Math.round(auto / done.length * 100);
+    }
+    calc();
+  }
+  function calc() {
+    var n = Math.max(0, +$('c-count').value || 0);
+    var m = Math.max(0, +$('c-min').value || 0);
+    var rate = Math.min(100, Math.max(0, +$('c-rate').value || 0)) / 100;
+    var chk = Math.max(0, +$('c-check').value || 0);
+    var before = n * m / 60;
+    var after = n * (1 - rate) * chk / 60;
+    var f1 = function (x) { return (Math.round(x * 10) / 10).toLocaleString('ja-JP'); };
+    $('o-before').textContent = f1(before);
+    $('o-after').textContent = f1(after);
+    $('o-save').textContent = f1(Math.max(0, before - after));
+    $('o-year').textContent = f1(Math.max(0, before - after) * 12);
+  }
+  ['c-count', 'c-min', 'c-check'].forEach(function (id) { $(id).addEventListener('input', calc); });
+  $('c-rate').addEventListener('input', function () { rateTouched = true; calc(); });
+
+  // ---------- コピー ----------
   function tsv() {
-    var head = ['ステータス', '書類種別', '関与先コード', '関与先名', '対象期間(開始)', '対象期間(終了)', '作成日', '金額の項目', '金額', '新ファイル名', '保存先フォルダ', '元のファイル名', '確認メモ'];
-    var lines = rows.filter(function (r) { return r.r; }).map(function (row) {
-      var r = row.r;
-      return [r.status, r.docType, r.clientCode, r.clientName, r.periodStart, r.periodEnd, r.createdDate,
-        r.amountLabel, r.amount == null ? '' : r.amount, r.suggestedFileName,
-        r.status === 'OK' ? r.suggestedFolder.join('/') : '_要確認', row.name, r.issues.join(' / ')]
-        .map(function (v) { return String(v).replace(/[\t\n]/g, ' '); }).join('\t');
+    var head = ['ステータス', '書類種別', '顧問先コード', '顧問先名', '対象期間(開始)', '対象期間(終了)', '作成日', '金額の項目', '金額', '新ファイル名', '保存先フォルダ', '元のファイル名', '確認メモ'];
+    var lines = rows.map(function (row) { return { row: row, v: view(row) }; }).filter(function (x) { return x.v; }).map(function (x) {
+      var v = x.v;
+      return [v.status, v.docType, v.clientCode, v.clientName, v.periodStart, v.periodEnd, v.createdDate,
+        v.amountLabel, v.amount == null ? '' : v.amount, v.placed ? v.suggestedFileName : '',
+        v.placed ? v.suggestedFolder.join('/') : (v.status === '除外' ? '_重複(削除候補)' : '_要確認'), x.row.name, v.issues.join(' / ')]
+        .map(function (val) { return String(val).replace(/[\t\n]/g, ' '); }).join('\t');
     });
     return [head.join('\t')].concat(lines).join('\n');
   }
 
-  // ---- イベント ----
+  // ---------- イベント ----------
   $('rows').addEventListener('click', function (e) {
     var tr = e.target.closest('tr[data-id]');
     if (tr) select(+tr.getAttribute('data-id'));
   });
-  $('file').addEventListener('change', async function (e) {
-    var files = Array.prototype.slice.call(e.target.files || []);
+  ['f-client', 'f-type', 'f-status'].forEach(function (id) { $(id).addEventListener('change', render); });
+  $('f-text').addEventListener('input', render);
+
+  function showTab(which) {
+    var list = which === 'list';
+    $('tab-list').setAttribute('aria-selected', String(list));
+    $('tab-status').setAttribute('aria-selected', String(!list));
+    $('view-list').hidden = !list;
+    $('view-status').hidden = list;
+  }
+  $('tab-list').addEventListener('click', function () { showTab('list'); });
+  $('tab-status').addEventListener('click', function () { showTab('status'); });
+
+  async function addFiles(files) {
     for (var i = 0; i < files.length; i++) {
       var row = await addPdf(files[i].name, await files[i].arrayBuffer(), false);
       if (i === 0) select(row.id);
     }
+  }
+  $('file').addEventListener('change', async function (e) {
+    await addFiles(Array.prototype.slice.call(e.target.files || []));
     e.target.value = '';
   });
   var drop = $('drop');
   ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
   ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
-  drop.addEventListener('drop', async function (e) {
+  drop.addEventListener('drop', function (e) {
     var files = Array.prototype.slice.call(e.dataTransfer.files || []).filter(function (f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
     if (!files.length) { toast('PDFファイルを入れてください'); return; }
-    for (var i = 0; i < files.length; i++) {
-      var row = await addPdf(files[i].name, await files[i].arrayBuffer(), false);
-      if (i === 0) select(row.id);
-    }
+    addFiles(files);
   });
   $('btn-sample').addEventListener('click', loadSamples);
   $('btn-clear').addEventListener('click', function () {

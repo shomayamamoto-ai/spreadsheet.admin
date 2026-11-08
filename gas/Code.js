@@ -1,11 +1,11 @@
 /**
- * TKC書類PDF 自動仕分け(Google Apps Script 版)
+ * 書類PDF 自動仕分け(Google Apps Script 版)
  *
  * 【できること】
  *  1. 「受付フォルダ」に入れたPDFを読み取る
- *  2. 書類種別・関与先・対象期間・金額などを「書類一覧」シートに1行ずつ記録
+ *  2. 書類種別・顧問先・対象期間・金額などを「書類一覧」シートに1行ずつ記録
  *  3. 読み取れたものは、ファイル名を付け直して
- *     「関与先 / 年度 / 書類種別」のフォルダへ自動で移動
+ *     「顧問先 / 年度 / 書類種別」のフォルダへ自動で移動
  *  4. 自信がないものは「_要確認」フォルダへ移し、人がシートで直してから確定
  *
  * 【使い方】README.md の「Google Apps Script 版のセットアップ」を参照。
@@ -13,14 +13,15 @@
  */
 
 var SHEET_LOG = '書類一覧';
-var SHEET_CLIENTS = '関与先マスタ';
+var SHEET_CLIENTS = '顧問先マスタ';
 var SHEET_SETTINGS = '設定';
+var SHEET_STATUS = '保存状況';
 var REVIEW_FOLDER_NAME = '_要確認';
 var MAX_FILES_PER_RUN = 20;          // 1回の実行で処理する最大件数
 var TIME_LIMIT_MS = 5 * 60 * 1000;   // GASの実行時間上限(6分)より手前で止める
 
 var LOG_HEADERS = [
-  '処理日時', 'ステータス', '書類種別', '関与先コード', '関与先名',
+  '処理日時', 'ステータス', '書類種別', '顧問先コード', '顧問先名',
   '対象期間(開始)', '対象期間(終了)', '期', '作成日', '金額の項目', '金額',
   '新ファイル名', '保存先フォルダ', 'PDFリンク', '元のファイル名', '確認メモ', 'ファイルID'
 ];
@@ -36,6 +37,7 @@ function onOpen() {
     .addItem('② 受付フォルダを今すぐ読み取る', 'processInbox')
     .addSeparator()
     .addItem('選択した行を確定して移動する', 'confirmSelectedRows')
+    .addItem('保存状況シートを作り直す', 'refreshStatusSheet')
     .addSeparator()
     .addItem('自動読み取りをON(15分ごと)', 'enableTrigger')
     .addItem('自動読み取りをOFF', 'disableTrigger')
@@ -55,7 +57,7 @@ function setup() {
     log.setFrozenRows(1);
     log.getRange('K:K').setNumberFormat('#,##0;[Red]-#,##0');
     var rule = SpreadsheetApp.newDataValidation()
-      .requireValueInList(['OK', '要確認', '確定済み', 'エラー'], true).build();
+      .requireValueInList(['OK', '要確認', '重複の疑い', '確定済み', '除外', 'エラー'], true).build();
     log.getRange(2, COL['ステータス'], 1000, 1).setDataValidation(rule);
     var docTypes = TaxDocExtractor.DOC_TYPES.map(function (d) { return d.name; });
     log.getRange(2, COL['書類種別'], 1000, 1).setDataValidation(
@@ -66,12 +68,16 @@ function setup() {
       .whenFormulaSatisfied('=$B2="要確認"').setBackground('#fff4e5').setRanges([area]).build());
     rules.push(SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$B2="エラー"').setBackground('#fde7e9').setRanges([area]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$B2="重複の疑い"').setBackground('#fde7e9').setRanges([area]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$B2="除外"').setFontColor('#888888').setStrikethrough(true).setRanges([area]).build());
     log.setConditionalFormatRules(rules);
   }
 
   var cl = ss.getSheetByName(SHEET_CLIENTS) || ss.insertSheet(SHEET_CLIENTS);
   if (cl.getLastRow() === 0) {
-    cl.getRange(1, 1, 1, 4).setValues([['関与先コード', '関与先名(正式名称)', '別名(カンマ区切り)', '決算月(1〜12)']])
+    cl.getRange(1, 1, 1, 4).setValues([['顧問先コード', '顧問先名(正式名称)', '別名(カンマ区切り)', '決算月(1〜12)']])
       .setFontWeight('bold').setBackground('#e8f0fe');
     cl.getRange(2, 1, 2, 4).setValues([
       ['10001', '株式会社さくら建設', 'さくら建設', 3],
@@ -86,11 +92,12 @@ function setup() {
       ['項目', '値', '説明'],
       ['受付フォルダID', '', 'PDFを放り込むフォルダ。URLの folders/ の後ろの文字列'],
       ['保存先フォルダID', '', '仕分け後のフォルダを作る親フォルダ'],
-      ['自動で移動する', 'TRUE', 'FALSEにすると、読み取って記録するだけ(移動しない)']
+      ['自動で移動する', 'TRUE', 'FALSEにすると、すべて「_要確認」に入れ、人が確定してから仕分ける']
     ]);
     st.getRange('A1:C1').setFontWeight('bold').setBackground('#e8f0fe');
     st.setColumnWidth(3, 420);
   }
+  refreshStatusSheet();
   SpreadsheetApp.getUi().alert('初期設定が完了しました。\n「設定」シートにフォルダIDを入力してください。');
 }
 
@@ -190,6 +197,7 @@ function processInbox() {
     var archive = DriveApp.getFolderById(settings.archiveId);
     var review = getOrCreateFolder_(archive, REVIEW_FOLDER_NAME);
     var log = SpreadsheetApp.getActive().getSheetByName(SHEET_LOG);
+    var known = existingKeys_(log); // すでに仕分け済みの書類(重複チェック用)
 
     var files = inbox.getFilesByType(MimeType.PDF);
     var count = 0;
@@ -199,8 +207,18 @@ function processInbox() {
       var row;
       try {
         var r = TaxDocExtractor.extract(pdfToText_(file), { clients: clients });
+        var key = TaxDocExtractor.docKey(r);
+        if (key && known[key]) {
+          // 同じ顧問先・書類種別・期間の書類が、すでに仕分け済み
+          r.status = '重複の疑い';
+          r.issues.push('同じ書類が' + known[key] + '行目にあります。不要なら「除外」、別の書類なら確定してください');
+        } else if (r.status === 'OK' && !settings.autoMove) {
+          r.status = '要確認';
+          r.issues.push('自動移動がOFFのため、確認待ち');
+        }
         var moved;
-        if (r.status === 'OK' && settings.autoMove) {
+        if (r.status === 'OK') {
+          if (key) known[key] = log.getLastRow() + 1;
           moved = moveAndRename_(file, archive, r.suggestedFolder, r.suggestedFileName);
         } else {
           file.moveTo(review);
@@ -210,8 +228,8 @@ function processInbox() {
           new Date(), r.status, r.docType, r.clientCode, r.clientName,
           r.periodStart, r.periodEnd, r.term ? '第' + r.term + '期' : '', r.createdDate,
           r.amountLabel, r.amount === null ? '' : r.amount,
-          r.status === 'OK' ? moved.name : r.suggestedFileName,
-          r.status === 'OK' ? moved.path : REVIEW_FOLDER_NAME + '(提案:' + r.suggestedFolder.join(' / ') + ')',
+          r.status === 'OK' ? moved.name : (r.suggestedFileName.indexOf('不明') >= 0 ? '' : r.suggestedFileName),
+          r.status === 'OK' ? moved.path : REVIEW_FOLDER_NAME + (r.suggestedFileName.indexOf('不明') >= 0 ? '' : '(提案:' + r.suggestedFolder.join(' / ') + ')'),
           file.getUrl(), originalName, r.issues.join(' / '), file.getId()
         ];
       } catch (e) {
@@ -226,6 +244,55 @@ function processInbox() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 「書類一覧」で仕分け済みの行から、重複チェック用のキー → 行番号 を作る
+function existingKeys_(log) {
+  var keys = {};
+  if (log.getLastRow() < 2) return keys;
+  var values = log.getRange(2, 1, log.getLastRow() - 1, LOG_HEADERS.length).getValues();
+  values.forEach(function (v, i) {
+    var get = function (h) { return v[COL[h] - 1]; };
+    if (get('ステータス') !== 'OK' && get('ステータス') !== '確定済み') return;
+    var key = TaxDocExtractor.docKey({
+      clientCode: String(get('顧問先コード') || ''), clientName: get('顧問先名'), docType: get('書類種別'),
+      periodStart: fmt_(get('対象期間(開始)')), periodEnd: fmt_(get('対象期間(終了)'))
+    });
+    if (key) keys[key] = i + 2;
+  });
+  return keys;
+}
+
+// ------------------------------------------------------------
+// 保存状況シート:顧問先 × 書類種別で、仕分け済みの件数を数える
+// (数式なので、書類一覧が増えると自動で更新される)
+// ------------------------------------------------------------
+function refreshStatusSheet() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(SHEET_STATUS) || ss.insertSheet(SHEET_STATUS);
+  sh.clear();
+  var types = TaxDocExtractor.DOC_TYPES.map(function (d) { return d.name; });
+  var clients = getClients_();
+  sh.getRange(1, 1, 1, types.length + 2).setValues([['顧問先コード', '顧問先名'].concat(types)])
+    .setFontWeight('bold').setBackground('#e8f0fe');
+  if (clients.length) {
+    var log = "'" + SHEET_LOG + "'!";
+    var rows = clients.map(function (c, i) {
+      var r = i + 2;
+      return [c.code, c.name].concat(types.map(function (t, j) {
+        var col = sh.getRange(1, j + 3).getA1Notation().replace(/\d+/, '');
+        var base = 'COUNTIFS(' + log + 'D:D,$A' + r + ',' + log + 'C:C,' + col + '$1,' + log + 'B:B,';
+        return '=IF(' + base + '"OK")+' + base + '"確定済み")=0,"未保存",' + base + '"OK")+' + base + '"確定済み"))';
+      }));
+    });
+    sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    var area = sh.getRange(2, 3, rows.length, types.length);
+    sh.setConditionalFormatRules([SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo('未保存').setFontColor('#999999').setRanges([area]).build()]);
+    area.setHorizontalAlignment('center');
+  }
+  sh.setFrozenRows(1);
+  sh.setFrozenColumns(2);
 }
 
 // ------------------------------------------------------------
@@ -248,16 +315,16 @@ function confirmSelectedRows() {
     if (rowNo === 1) continue;
     var v = log.getRange(rowNo, 1, 1, LOG_HEADERS.length).getValues()[0];
     var get = function (h) { return v[COL[h] - 1]; };
-    if (get('ステータス') === '確定済み') continue;
-    if (!get('書類種別') || !get('関与先名') || !get('対象期間(終了)')) {
-      skipped.push(rowNo + '行目(書類種別・関与先名・対象期間(終了)を入力してください)');
+    if (get('ステータス') === '確定済み' || get('ステータス') === '除外') continue;
+    if (!get('書類種別') || !get('顧問先名') || !get('対象期間(終了)')) {
+      skipped.push(rowNo + '行目(書類種別・顧問先名・対象期間(終了)を入力してください)');
       continue;
     }
     var client = null;
-    clients.forEach(function (c) { if (c.code && c.code === String(get('関与先コード'))) client = c; });
+    clients.forEach(function (c) { if (c.code && c.code === String(get('顧問先コード'))) client = c; });
     var names = TaxDocExtractor.suggestNames({
-      clientCode: get('関与先コード'),
-      clientName: get('関与先名'),
+      clientCode: get('顧問先コード'),
+      clientName: get('顧問先名'),
       docType: get('書類種別'),
       periodStart: fmt_(get('対象期間(開始)')),
       periodEnd: fmt_(get('対象期間(終了)'))

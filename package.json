@@ -1,5 +1,5 @@
 {
-  "name": "tkc-pdf-spreadsheet-demo",
+  "name": "pdf-spreadsheet-sorter",
   "version": "1.0.0",
   "private": true,
   "description": "税理士事務所のPDF書類を読み取り、スプレッドシートに整理するデモ",

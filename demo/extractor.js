@@ -2,7 +2,7 @@
 /**
  * TaxDocExtractor
  * PDFから取り出した「文字列」を読み取り、
- * 書類種別・関与先・対象期間・金額などを抜き出す。
+ * 書類種別・顧問先・対象期間・金額などを抜き出す。
  *
  * ・ブラウザ(デモ画面)、Google Apps Script、Node.js(テスト)の
  *   どれでも同じコードが動くように書いている。
@@ -10,7 +10,7 @@
  *   (キーワードと書式のパターンで判定する)
  *
  * ※ キーワードや項目名は、一般的な会計帳票を想定した初期値です。
- *   実際のTKC帳票のPDFを見ながら、DOC_TYPES を調整してください。
+ *   実際に使っている帳票のPDFを見ながら、DOC_TYPES を調整してください。
  */
 var TaxDocExtractor = (function () {
   'use strict';
@@ -96,7 +96,7 @@ var TaxDocExtractor = (function () {
     '特定非営利活動法人', 'NPO法人'
   ];
 
-  // 会計事務所側の名前は「関与先名」として拾わない
+  // 会計事務所側の名前は「顧問先名」として拾わない
   var OFFICE_WORDS = ['税理士', '会計事務所', '税務署'];
 
   // ------------------------------------------------------------
@@ -189,7 +189,7 @@ var TaxDocExtractor = (function () {
   }
 
   // ------------------------------------------------------------
-  // 関与先(顧問先)の読み取り
+  // 顧問先(顧問先)の読み取り
   // ------------------------------------------------------------
   function isOfficeName(s) {
     return OFFICE_WORDS.some(function (w) { return s.indexOf(w) >= 0; });
@@ -205,8 +205,8 @@ var TaxDocExtractor = (function () {
 
   function findClientName(lines) {
     var i, m, line;
-    // 1) 「関与先名:○○」のようにラベルがあるもの
-    var labelRe = /(関与先名|顧問先名|会社名|法人名|事業者名|氏名又は名称|名称|商号)\s*[::]?\s*(.+)/;
+    // 1) 「顧問先名:○○」のようにラベルがあるもの
+    var labelRe = /(顧問先名|関与先名|会社名|法人名|事業者名|氏名又は名称|名称|商号)\s*[::]?\s*(.+)/;
     for (i = 0; i < lines.length; i++) {
       m = lines[i].match(labelRe);
       if (m) {
@@ -231,7 +231,7 @@ var TaxDocExtractor = (function () {
   }
 
   function findClientCode(flat) {
-    var m = flat.match(/(?:関与先|顧問先)(?:コード|番号|CD|No\.?)[::]?(\d{3,10})/);
+    var m = flat.match(/(?:顧問先|関与先)(?:コード|番号|CD|No\.?)[::]?(\d{3,10})/);
     return m ? m[1] : '';
   }
 
@@ -241,7 +241,7 @@ var TaxDocExtractor = (function () {
     return k;
   }
 
-  // 関与先マスタ(任意)と照合して、名前の表記ゆれをそろえる
+  // 顧問先マスタ(任意)と照合して、名前の表記ゆれをそろえる
   function matchMaster(clients, code, name, flat) {
     if (!clients || !clients.length) return null;
     var i, c;
@@ -353,7 +353,7 @@ var TaxDocExtractor = (function () {
     return end.y + '年' + end.m + '月期';
   }
 
-  // 月単位の書類を、関与先の決算月から「どの期か」に振り分ける
+  // 月単位の書類を、顧問先の決算月から「どの期か」に振り分ける
   function fiscalYearOfMonth(y, m, fiscalEndMonth) {
     if (!fiscalEndMonth) return y + '年';
     var endYear = m > fiscalEndMonth ? y + 1 : y;
@@ -378,7 +378,7 @@ var TaxDocExtractor = (function () {
         yearFolder = fiscalYearOfMonth(p.end.y, p.end.m, fem);
       }
     }
-    var clientPart = (r.clientCode ? r.clientCode + '_' : '') + (r.clientName || '関与先不明');
+    var clientPart = (r.clientCode ? r.clientCode + '_' : '') + (r.clientName || '顧問先不明');
     var docPart = r.docType || '種別不明';
     return {
       fileName: safe(clientPart) + '_' + safe(periodPart) + '_' + safe(docPart) + '.pdf',
@@ -388,7 +388,7 @@ var TaxDocExtractor = (function () {
 
   // ------------------------------------------------------------
   // メイン:文字列 → 抽出結果
-  // options.clients : 関与先マスタ [{code, name, aliases, fiscalEndMonth}]
+  // options.clients : 顧問先マスタ [{code, name, aliases, fiscalEndMonth}]
   // ------------------------------------------------------------
   function extract(rawText, options) {
     options = options || {};
@@ -407,7 +407,7 @@ var TaxDocExtractor = (function () {
       issues.push('書類種別が「' + top.type.name + '」か「' + second.type.name + '」か紛らわしい');
     }
 
-    // 関与先
+    // 顧問先
     var code = findClientCode(flat);
     var nameHit = findClientName(lines);
     var name = nameHit ? nameHit.value : '';
@@ -416,11 +416,11 @@ var TaxDocExtractor = (function () {
     if (master) {
       if (!code) code = String(master.code);
       name = master.name;
-      nameHow = '関与先マスタと照合';
-    } else if (options.clients && options.clients.length) {
-      issues.push('関与先マスタに該当なし');
+      nameHow = '顧問先マスタと照合';
+    } else if (name && options.clients && options.clients.length) {
+      issues.push('「' + name + '」は顧問先マスタに登録がありません');
     }
-    if (!name) issues.push('関与先名が見つかりません');
+    if (!name) issues.push('顧問先名が見つかりません');
 
     // 期間・日付
     var period = findPeriod(flat);
@@ -492,8 +492,19 @@ var TaxDocExtractor = (function () {
     }, client);
   }
 
+  // ------------------------------------------------------------
+  // 重複チェック用のキー(同じ顧問先・同じ書類種別・同じ期間なら同じ値)
+  // 種別・期間・顧問先のどれかが空なら、比較しない('' を返す)
+  // ------------------------------------------------------------
+  function docKey(r) {
+    var who = r.clientCode ? String(r.clientCode) : (r.clientName ? nameKey(r.clientName) : '');
+    if (!who || !r.docType || !r.periodEnd) return '';
+    return [who, r.docType, r.periodStart || '', r.periodEnd].join('|');
+  }
+
   return {
     extract: extract,
+    docKey: docKey,
     suggestNames: suggestNames,
     normalize: normalize,
     DOC_TYPES: DOC_TYPES

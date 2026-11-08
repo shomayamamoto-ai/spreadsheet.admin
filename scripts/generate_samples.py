@@ -3,7 +3,7 @@
 
 ・会社名・金額などはすべて架空です。
 ・一般的な会計帳票の見た目をまねたもので、
-  TKCの実際の帳票レイアウトとは異なります。
+  特定の会計ソフトの帳票レイアウトを再現したものではありません。
 
 使い方:
     python3 scripts/generate_samples.py
@@ -99,13 +99,16 @@ class Sheet:
 # ------------------------------------------------------------------
 # 1. 月次試算表(株式会社さくら建設)
 # ------------------------------------------------------------------
-def monthly_trial_balance():
-    s = Sheet("scan_0001.pdf", landscape(A4))
+def monthly_trial_balance(filename="scan_0001.pdf", month="令和7年3月分(第18期)",
+                          created="令和7年4月15日", code="顧問先コード:10001",
+                          name="顧問先名:株式会社さくら建設"):
+    s = Sheet(filename, landscape(A4))
     s.title("月次試算表(損益計算書)", s.h - 50)
-    s.text(40, s.h - 85, "関与先コード:10001")
-    s.text(40, s.h - 102, "関与先名:株式会社さくら建設")
-    s.text(s.w / 2, s.h - 85, "令和7年3月分(第18期)", 11, center=True)
-    s.text(s.w - 40, s.h - 85, "作成日:令和7年4月15日", right=True)
+    if code:
+        s.text(40, s.h - 85, code)
+    s.text(40, s.h - 102, name)
+    s.text(s.w / 2, s.h - 85, month, 11, center=True)
+    s.text(s.w - 40, s.h - 85, "作成日:" + created, right=True)
     rows = [
         ["勘定科目", "当月", "期首からの累計", "構成比"],
         ["売上高", "12,380,000", "110,830,000", "100.0%"],
@@ -132,7 +135,7 @@ def financial_statements():
     s.text(s.w / 2, s.h - 230, "第32期", 14, center=True)
     s.text(s.w / 2, s.h - 260, "自 令和6年1月1日  至 令和6年12月31日", 12, center=True)
     s.text(s.w / 2, s.h - 420, "有限会社みなと商店", 20, center=True)
-    s.text(s.w / 2, s.h - 450, "関与先コード:10002", 10, center=True)
+    s.text(s.w / 2, s.h - 450, "顧問先コード:10002", 10, center=True)
     rows = [
         ["損益計算書(要約)", "金額(円)"],
         ["売上高", "64,210,880"],
@@ -156,7 +159,7 @@ def corporate_tax():
     s.title("法人税の確定申告書(別表一 控)", s.h - 60)
     s.text(40, s.h - 100, "事業年度 自 令和6年7月1日 至 令和7年6月30日")
     s.text(40, s.h - 118, "法人名:合同会社ひかりデザイン")
-    s.text(40, s.h - 136, "関与先コード:10003")
+    s.text(40, s.h - 136, "顧問先コード:10003")
     s.text(s.w - 40, s.h - 100, "提出日:令和7年8月25日", right=True)
     rows = [
         ["項目", "金額(円)"],
@@ -181,7 +184,7 @@ def consumption_tax():
     s.title("消費税及び地方消費税の確定申告書(控)", s.h - 60)
     s.text(40, s.h - 100, "課税期間 自 令和6年4月1日 至 令和7年3月31日")
     s.text(40, s.h - 118, "名称:株式会社さくら建設")
-    s.text(40, s.h - 136, "関与先コード:10001")
+    s.text(40, s.h - 136, "顧問先コード:10001")
     s.text(s.w - 40, s.h - 100, "作成日:令和7年5月26日", right=True)
     rows = [
         ["項目", "金額(円)"],
@@ -204,7 +207,7 @@ def withholding():
     s.title("給与所得・退職所得等の所得税徴収高計算書(納付書)", s.h - 60)
     s.text(40, s.h - 100, "令和7年10月分")
     s.text(40, s.h - 118, "氏名又は名称:有限会社みなと商店")
-    s.text(40, s.h - 136, "関与先コード:10002")
+    s.text(40, s.h - 136, "顧問先コード:10002")
     s.text(s.w - 40, s.h - 100, "作成日:令和7年11月5日", right=True)
     rows = [
         ["区分", "人員", "支給額(円)", "税額(円)"],
@@ -224,7 +227,7 @@ def year_end():
     s = Sheet("scan_0006.pdf")
     s.title("令和6年分 給与所得の源泉徴収票(控)", s.h - 60)
     s.text(40, s.h - 100, "支払者 名称:株式会社あおば食品")
-    s.text(40, s.h - 118, "関与先コード:10004")
+    s.text(40, s.h - 118, "顧問先コード:10004")
     s.text(40, s.h - 136, "受給者:従業員A(架空)")
     s.text(s.w - 40, s.h - 100, "作成日:令和7年1月20日", right=True)
     rows = [
@@ -239,7 +242,7 @@ def year_end():
 
 
 # ------------------------------------------------------------------
-# 7. 要確認になる例(関与先・期間が書かれていない打合せメモ)
+# 7. 要確認になる例(顧問先・期間が書かれていない打合せメモ)
 # ------------------------------------------------------------------
 def unknown_memo():
     s = Sheet("scan_0007.pdf")
@@ -254,9 +257,25 @@ def unknown_memo():
     s.save()
 
 
+# ------------------------------------------------------------------
+# 8. 表記ゆれの例:コードなし・「(株)」表記・西暦 → マスタ照合でそろう
+# ------------------------------------------------------------------
+def monthly_variant():
+    monthly_trial_balance("scan_0008.pdf", month="2025年4月分", created="2025/05/14",
+                          code="", name="顧問先名:(株)さくら建設")
+
+
+# ------------------------------------------------------------------
+# 9. 重複の例:scan_0001 と同じ書類を、もう一度保存してしまったケース
+# ------------------------------------------------------------------
+def duplicate():
+    monthly_trial_balance("scan_0009.pdf")
+
+
 if __name__ == "__main__":
     for fn in [monthly_trial_balance, financial_statements, corporate_tax,
-               consumption_tax, withholding, year_end, unknown_memo]:
+               consumption_tax, withholding, year_end, unknown_memo,
+               monthly_variant, duplicate]:
         fn()
     print("出力先:", OUT)
     for p in sorted(OUT.glob("*.pdf")):
