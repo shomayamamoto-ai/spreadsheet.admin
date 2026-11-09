@@ -5,6 +5,7 @@
 読み取った結果をもとに、ファイル名を付け直し、
 「顧問先 / 年度 / 書類種別」のフォルダへ自動で仕分けます。
 
+- 提案サイト(ブラウザで見る提案資料):`site/index.html`
 - 提案資料:[docs/proposal.md](docs/proposal.md)
 - 事務所への導入手順(そのまま渡せる手順書):[docs/導入手順.md](docs/導入手順.md)
 - サンプルPDF(すべて架空データ):[demo/samples/](demo/samples/)

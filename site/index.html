@@ -1,0 +1,377 @@
+<title>PDF仕分けアシスタントのご提案</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho:wght@400;700&display=swap">
+<style>
+/* Layout: 帳簿の緑罫を背景に、縦一列で「課題→仕組み→守り方→効果→導入」と読み進める提案書型のサイト */
+:root {
+  --paper: #f3f6f4;
+  --surface: #ffffff;
+  --ink: #1b2822;
+  --muted: #55665d;
+  --rule: #cfdcd4;
+  --rule-strong: #9dbaac;
+  --accent: #1d6a50;
+  --accent-ink: #ffffff;
+  --accent-soft: #e1eee7;
+  --warn: #8f5200;
+  --warn-soft: #fff0d9;
+  --code-bg: #eaf1ed;
+  --font-body: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  --font-display: "BIZ UDPMincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #101714; --surface: #17201c; --ink: #e2ebe6; --muted: #9caea4; --rule: #2a3932; --rule-strong: #3f574b;
+    --accent: #63c49b; --accent-ink: #0c1912; --accent-soft: #1a3127; --warn: #f2b65c; --warn-soft: #3a2a12; --code-bg: #1d2924;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #101714; --surface: #17201c; --ink: #e2ebe6; --muted: #9caea4; --rule: #2a3932; --rule-strong: #3f574b;
+  --accent: #63c49b; --accent-ink: #0c1912; --accent-soft: #1a3127; --warn: #f2b65c; --warn-soft: #3a2a12; --code-bg: #1d2924;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 56px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; }
+h2 { font-family: var(--font-display); font-size: 26px; line-height: 1.45; margin: 0 0 6px; letter-spacing: 0.02em; }
+h3 { font-size: 16px; margin: 0; }
+.lead { color: var(--muted); margin: 0 0 22px; max-width: 64ch; }
+.mark { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 3px; white-space: nowrap; vertical-align: 1px; }
+.mark.fact { background: var(--accent-soft); color: var(--accent); }
+.mark.guess { background: var(--warn-soft); color: var(--warn); }
+
+/* ---------- 上部の帯 ---------- */
+.topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding-block: 18px; border-bottom: 1px solid var(--rule); }
+.brand { font-weight: 700; letter-spacing: 0.04em; }
+.topnav { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; }
+.topnav a { color: var(--muted); text-decoration: none; }
+.topnav a:hover { color: var(--accent); }
+
+/* ---------- 冒頭 ---------- */
+.hero { padding-block: 44px 36px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 36px; align-items: center; }
+.hero h1 { font-family: var(--font-display); font-size: 38px; line-height: 1.4; margin: 0 0 14px; letter-spacing: 0.02em; }
+.hero p { margin: 0 0 22px; color: var(--muted); max-width: 34em; }
+.cta { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14.5px; font-weight: 700; padding: 10px 18px; border-radius: 4px; text-decoration: none; border: 1px solid var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { color: var(--accent); background: transparent; }
+
+/* 帳簿風の「仕分け前 → 仕分け後」 */
+.ledger {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden;
+  font-family: var(--font-mono); font-size: 12.5px; min-width: 0;
+}
+.ledger-head { display: grid; grid-template-columns: minmax(0, 0.8fr) 28px minmax(0, 1.6fr); background: var(--accent-soft); border-bottom: 1px solid var(--rule-strong); font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--accent); }
+.ledger-head span, .ledger-row span { padding: 7px 10px; }
+.ledger-row { display: grid; grid-template-columns: minmax(0, 0.8fr) 28px minmax(0, 1.6fr); min-height: 36px; align-items: center; border-bottom: 1px solid var(--rule); }
+.ledger-row .from { color: var(--muted); overflow-wrap: anywhere; }
+.ledger-row .arrow { color: var(--accent); padding: 0; text-align: center; font-family: var(--font-body); }
+.ledger-row .to { overflow-wrap: anywhere; line-height: 1.5; }
+.ledger-row .to b { color: var(--accent); font-weight: 400; }
+.ledger-row.review .to { color: var(--warn); font-family: var(--font-body); font-size: 12.5px; }
+.ledger-foot { font-family: var(--font-body); font-size: 11.5px; color: var(--muted); padding: 6px 10px; background: var(--surface); }
+
+/* ---------- セクション ---------- */
+section.block { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.card .kicker { font-size: 12px; color: var(--accent); font-weight: 700; letter-spacing: 0.06em; }
+
+/* 流れ(順番に意味があるので番号を付ける) */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; counter-reset: step; }
+.flow li { position: relative; padding: 14px 14px 14px 0; border-top: 3px solid var(--rule-strong); counter-increment: step; min-width: 0; }
+.flow li.ai { border-top-color: var(--accent); }
+.flow li::before { content: counter(step); display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); border: 1px solid var(--rule-strong); font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+.flow li.ai::before { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.flow b { display: block; font-size: 14.5px; }
+.flow span { display: block; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.note-box { margin-top: 16px; background: var(--accent-soft); border-radius: 4px; padding: 12px 16px; font-size: 14px; }
+
+/* 守り方 */
+.guards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); overflow: hidden; }
+.guard { padding: 16px 18px; border-bottom: 1px solid var(--rule); border-right: 1px solid var(--rule); display: grid; gap: 4px; min-width: 0; }
+.guard:nth-child(2n) { border-right: 0; }
+.guard:nth-last-child(-n + 2) { border-bottom: 0; }
+.guard h3 { display: flex; gap: 8px; align-items: baseline; }
+.guard h3 small { font-size: 12px; color: var(--accent); font-weight: 700; }
+.guard p { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* 表 */
+.table-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+th, td { padding: 10px 14px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+thead th { background: var(--accent-soft); color: var(--accent); font-size: 13px; white-space: nowrap; }
+tbody th { font-weight: 700; white-space: nowrap; color: var(--muted); font-size: 13px; }
+tr:last-child td, tr:last-child th { border-bottom: 0; }
+td.yes { color: var(--accent); font-weight: 700; }
+
+/* 試算 */
+.calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 18px; align-items: center; }
+.calc-in { display: grid; gap: 10px; }
+.calc-in label { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; font-size: 14px; }
+.calc-in input { font: inherit; font-size: 14px; width: 6.5em; text-align: right; padding: 5px 8px; border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--surface); color: var(--ink); font-variant-numeric: tabular-nums; }
+.calc-out { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.calc-out div { border-left: 3px solid var(--accent); padding: 4px 12px; }
+.calc-out em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); }
+.calc-out strong { font-family: var(--font-display); font-size: 30px; font-variant-numeric: tabular-nums; }
+.calc-out small { font-size: 13px; margin-left: 2px; }
+.calc-note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
+/* 導入の流れ */
+.steps { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; }
+.step { display: grid; grid-template-columns: 150px minmax(0, 1fr) 110px; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.step:last-child { border-bottom: 0; }
+.step b { font-size: 14.5px; }
+.step p { margin: 0; color: var(--muted); font-size: 14px; }
+.step span { font-size: 13px; color: var(--accent); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* よくある質問 */
+.faq { display: grid; gap: 8px; }
+.faq details { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0 18px; }
+.faq summary { cursor: pointer; padding: 14px 0; font-weight: 700; list-style-position: outside; }
+.faq details p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+.sources { font-size: 13px; color: var(--muted); padding-left: 1.2em; margin: 0; display: grid; gap: 4px; }
+.sources a { overflow-wrap: anywhere; }
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 12.5px; color: var(--muted); line-height: 1.9; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); padding-block: 32px 24px; }
+  .hero h1 { font-size: 30px; }
+  .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .flow li { padding: 12px 0; }
+  .calc { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .grid2, .guards { grid-template-columns: minmax(0, 1fr); }
+  .guard { border-right: 0; }
+  .guard:nth-last-child(2) { border-bottom: 1px solid var(--rule); }
+  .step { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .step span { text-align: left; }
+  h2 { font-size: 22px; }
+  .ledger-head, .ledger-row { grid-template-columns: minmax(0, 1fr); }
+  .ledger-head span:nth-child(2), .ledger-head span:nth-child(3), .ledger-row .arrow { display: none; }
+  .ledger-row .from { padding-bottom: 0; }
+  .ledger-row .from::after { content: " →"; color: var(--accent); }
+  .ledger-row .to { padding-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <span class="brand">PDF仕分けアシスタント</span>
+    <nav class="topnav" aria-label="ページ内の移動">
+      <a href="#problem">課題</a><a href="#how">仕組み</a><a href="#privacy">個人情報</a><a href="#features">できること</a><a href="#effect">効果</a><a href="#start">導入</a><a href="#faq">質問</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <div>
+      <h1>放り込んだ書類PDFを、<br>事務所の外に出さずに<br>自動で仕分けます。</h1>
+      <p>会計ソフトで作った試算表や申告書のPDFを読み取り、顧問先・年度・書類種別ごとにフォルダへ整理して、一覧表に記録します。読み取りに使うAIは、事務所のパソコンの中だけで動きます。</p>
+      <div class="cta">
+        <a class="btn primary" href="https://claude.ai/artifact/DuLZBGCUcceKQxzksHqkwi" target="_blank" rel="noopener">デモを試す(架空の書類9件)</a>
+        <a class="btn ghost" href="#start">導入の流れを見る</a>
+      </div>
+    </div>
+    <div class="ledger" role="table" aria-label="仕分け前と仕分け後のファイル名の例">
+      <div class="ledger-head" role="row"><span role="columnheader">今の保存フォルダ</span><span role="columnheader" aria-hidden="true"></span><span role="columnheader">仕分け後(顧問先 / 年度 / 書類種別)</span></div>
+      <div class="ledger-row" role="row"><span class="from" role="cell">scan_0001.pdf</span><span class="arrow" aria-hidden="true">→</span><span class="to" role="cell"><b>10001_株式会社さくら建設</b> / 2025年3月期 / 月次試算表 / …_2025-03_月次試算表.pdf</span></div>
+      <div class="ledger-row" role="row"><span class="from" role="cell">scan_0002.pdf</span><span class="arrow" aria-hidden="true">→</span><span class="to" role="cell"><b>10002_有限会社みなと商店</b> / 2024年12月期 / 決算書 / …_2024年12月期_決算書.pdf</span></div>
+      <div class="ledger-row" role="row"><span class="from" role="cell">scan_0003.pdf</span><span class="arrow" aria-hidden="true">→</span><span class="to" role="cell"><b>10003_合同会社ひかりデザイン</b> / 2025年6月期 / 法人税申告書 / …</span></div>
+      <div class="ledger-row" role="row"><span class="from" role="cell">scan_0005.pdf</span><span class="arrow" aria-hidden="true">→</span><span class="to" role="cell"><b>10002_有限会社みなと商店</b> / 2025年12月期 / 源泉所得税納付書 / …_2025-10_…</span></div>
+      <div class="ledger-row review" role="row"><span class="from" role="cell">scan_0007.pdf</span><span class="arrow" aria-hidden="true">→</span><span class="to" role="cell">要確認(顧問先・期間が書かれていないため、人が確認)</span></div>
+      <div class="ledger-foot">※ 会社名・書類はすべて架空のサンプルです</div>
+    </div>
+  </header>
+
+  <section class="block" id="problem" aria-labelledby="problem-title">
+    <h2 id="problem-title">いま起きていること</h2>
+    <p class="lead">書類をPDFにして保存フォルダへ入れるところまでは、どの事務所でも習慣になっています。困るのは、そのあとです。</p>
+    <div class="grid3">
+      <div class="card"><span class="kicker">探しにくい</span><h3>ファイル名がばらばら</h3><p>「scan_0001.pdf」のままでは、どの顧問先の・いつの・何の書類か、開くまで分かりません。</p></div>
+      <div class="card"><span class="kicker">手間が集中する</span><h3>仕分けは決算前にまとめて</h3><p>申告期限が近づくたびに、1件ずつ開いて名前を付け直し、フォルダへ移す作業が発生します。</p></div>
+      <div class="card"><span class="kicker">漏れに気づけない</span><h3>何が未保存か分からない</h3><p>顧問先ごとに、今月の試算表や今期の申告書がそろっているかを、すぐに確かめる方法がありません。</p></div>
+    </div>
+  </section>
+
+  <section class="block" id="how" aria-labelledby="how-title">
+    <h2 id="how-title">仕組み</h2>
+    <p class="lead">職員の作業は、今まで通り「PDFを保存するだけ」です。そのあとの流れを自動にします。</p>
+    <ol class="flow">
+      <li><b>受付フォルダに保存</b><span>今まで通り、作成した書類のPDFを入れるだけ。</span></li>
+      <li><b>ルールで読み取る</b><span>表題・顧問先コード・「令和7年3月期」などの書き方から判定。</span></li>
+      <li class="ai"><b>迷ったらパソコン内のAI</b><span>ルールで決めきれない書類だけ、事務所のパソコンで動くAIが補います。</span></li>
+      <li><b>根拠をPDFと照合</b><span>AIが挙げた根拠の文章が、本当にPDFに書いてあるかを確かめます。</span></li>
+      <li><b>フォルダと一覧表へ</b><span>名前を付け直して移動し、一覧表に1行ずつ記録します。</span></li>
+    </ol>
+    <p class="note-box">自信がない書類は、自動では移動しません。「要確認」に回し、職員が画面でPDFを見ながら選んで確定します。確定するときに、その帳票の表題や顧問先の呼び方を「覚える」ので、使うほど事務所の帳票に合っていきます。</p>
+  </section>
+
+  <section class="block" id="privacy" aria-labelledby="privacy-title">
+    <h2 id="privacy-title">個人情報の守り方</h2>
+    <p class="lead">顧問先の書類には、氏名・住所・マイナンバー・口座などが含まれます。書類の中身を事務所の外のAIやサーバーに渡さないことを、約束だけでなく、設定と自動のチェックで確かめています。</p>
+    <div class="guards">
+      <div class="guard"><h3><small>守り方 1</small>AIは事務所のパソコンの中だけ</h3><p>読み取りに使うAI(Ollama)は、事務所のパソコンにインストールして動かします。外部のAIサービスは使いません。</p></div>
+      <div class="guard"><h3><small>守り方 2</small>外部へ送れない作り</h3><p>通信先は「このパソコン自身」だけに限定しています。外部の住所を設定しても、プログラムが通信を止めます。</p></div>
+      <div class="guard"><h3><small>守り方 3</small>AIの思い込みを採用しない</h3><p>AIの答えは、根拠の文章がPDFにあるか、顧問先がマスタにあるかを照合してから使います。確かめられない答えは使いません。</p></div>
+      <div class="guard"><h3><small>守り方 4</small>毎回の自動チェック</h3><p>プログラムを直すたびに、外部へ送る命令や権限が入っていないかを、自動テストで確かめます。</p></div>
+      <div class="guard"><h3><small>守り方 5</small>必要な項目だけを記録</h3><p>一覧表には、書類の全文ではなく、種別・顧問先・期間・金額などだけを記録します。</p></div>
+      <div class="guard"><h3><small>守り方 6</small>相談するときは伏せ字版</h3><p>迷った書類を外部に相談したいときは、氏名・住所・個人番号・会社名・金額などを伏せた文字だけをコピーできます。</p></div>
+    </div>
+  </section>
+
+  <section class="block" id="features" aria-labelledby="features-title">
+    <h2 id="features-title">できること</h2>
+    <p class="lead">事務所でよく扱う書類と、和暦の書き方に対応しています。導入先の帳票に合わせて、画面の「設定」から増やせます。</p>
+    <div class="grid2">
+      <div class="card"><h3>対応している書類</h3><p>月次試算表、決算書、法人税申告書、消費税申告書、源泉所得税納付書、源泉徴収票・年末調整、法定調書合計表、給与支払報告書、償却資産申告書、届出書・申請書、議事録、総勘定元帳、請求書</p></div>
+      <div class="card"><h3>対応している期間の書き方</h3><p>「自 令和6年4月1日 至 令和7年3月31日」「令和7年3月期」「令和7年3月分」「令和7年1月から6月分」(納期の特例)「令和6年分」「R7.3.31現在」</p></div>
+      <div class="card"><h3>重複と保存漏れに気づく</h3><p>同じ顧問先・書類種別・期間の書類を二重に保存すると「重複の疑い」で止めます。顧問先ごとの保存状況から、未保存の書類も分かります。</p></div>
+      <div class="card"><h3>スキャンした紙の書類</h3><p>画像だけのPDFも、パソコン内の画像を読めるAIで文字起こしします。読み間違いに備え、項目を入力した状態で「要確認」にして人が確定します。</p></div>
+      <div class="card"><h3>事務所に合わせる設定</h3><p>フォルダ名・ファイル名の付け方、顧問先マスタ(CSV読み込み)、独自の書類種別を、見本を見ながら画面で設定できます。</p></div>
+      <div class="card"><h3>精度を数字で測る</h3><p>実際のPDFと正解表を比べ、「誤って自動で仕分けた件数」「要確認の割合」を測ります。測定中はファイルを動かしません。</p></div>
+    </div>
+
+    <h3 style="margin:26px 0 10px">2つの版</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col"></th><th scope="col">ローカルAI版(おすすめ)</th><th scope="col">Googleスプレッドシート版</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">動く場所</th><td>事務所のパソコン</td><td>Google のサーバー(Apps Script)</td></tr>
+          <tr><th scope="row">読み取り方</th><td>ルール+パソコン内のAI(迷った書類だけ)</td><td>ルールのみ</td></tr>
+          <tr><th scope="row">外部への送信</th><td class="yes">なし(通信先をこのパソコンに限定)</td><td class="yes">なし(外部と通信する権限を付けない)</td></tr>
+          <tr><th scope="row">スキャンした書類</th><td>パソコン内のAIで文字起こし</td><td>要確認に回る</td></tr>
+          <tr><th scope="row">一覧表</th><td>書類一覧.csv(Excel・スプレッドシートで開ける)</td><td>スプレッドシートに自動で記録</td></tr>
+          <tr><th scope="row">必要なもの</th><td>メモリに余裕のあるパソコン、Node.js、Ollama</td><td>Google Workspace(法人向け)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" id="effect" aria-labelledby="effect-title">
+    <h2 id="effect-title">効果の試算</h2>
+    <p class="lead">数字を、事務所の実際の件数と作業時間に置き換えてお使いください。</p>
+    <div class="calc">
+      <div class="calc-in">
+        <label for="c-count">月に保存するPDFの件数 <span><input id="c-count" type="number" min="0" step="10" value="300"> 件</span></label>
+        <label for="c-min">1件あたりの仕分け時間(今) <span><input id="c-min" type="number" min="0" step="0.5" value="1"> 分</span></label>
+        <label for="c-rate">自動で仕分けできる割合 <span><input id="c-rate" type="number" min="0" max="100" step="5" value="80"> %</span></label>
+        <label for="c-check">要確認1件の確認時間 <span><input id="c-check" type="number" min="0" step="0.5" value="1"> 分</span></label>
+      </div>
+      <div class="calc-out" aria-live="polite">
+        <div><em>今の仕分け時間</em><strong id="o-before">5</strong><small>時間/月</small></div>
+        <div><em>導入後の確認時間</em><strong id="o-after">1</strong><small>時間/月</small></div>
+        <div><em>削減できる時間</em><strong id="o-save">4</strong><small>時間/月</small></div>
+        <div><em>年間にすると</em><strong id="o-year">48</strong><small>時間/年</small></div>
+      </div>
+    </div>
+    <p class="calc-note"><span class="mark guess">仮定</span> 初期値(月300件・1件1分・自動8割)は、説明のための仮の数字です。「自動で仕分けできる割合」は、試験運用で測った値に置き換えてください。</p>
+  </section>
+
+  <section class="block" id="start" aria-labelledby="start-title">
+    <h2 id="start-title">導入の流れ</h2>
+    <p class="lead">本格導入の前に、実際のPDFで精度を測ってから判断します。測定中は、保存フォルダのファイルを動かしません。</p>
+    <div class="steps">
+      <div class="step"><b>パソコンの準備</b><p>Node.js と Ollama を入れ、AIのモデルを取り込みます。インターネットが必要なのはここだけです。</p><span>半日〜1日</span></div>
+      <div class="step"><b>帳票の確認と設定</b><p>よく使う帳票のPDFをお借りし、書類種別・名前の付け方・顧問先マスタを事務所に合わせます。</p><span>1〜2週間</span></div>
+      <div class="step"><b>精度の測定</b><p>実際のPDF50〜100件と正解表で、「誤って自動仕分け」が0件になるまで調整します。</p><span>試験運用に含む</span></div>
+      <div class="step"><b>試験運用</b><p>担当者1〜2名・顧問先数社で、毎日の運用を試します。</p><span>2〜4週間</span></div>
+      <div class="step"><b>本格導入</b><p>全顧問先へ広げます。要確認の書類を確定するたびに、帳票の目印が増えていきます。</p><span>1〜2週間</span></div>
+    </div>
+    <p class="calc-note"><span class="mark guess">仮定</span> 期間は目安です。書類の種類や件数によって変わります。</p>
+
+    <h3 style="margin:26px 0 10px">試験運用で測る数字(案)</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">数字</th><th scope="col">目安(案)</th><th scope="col">理由</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">誤って自動仕分けした件数</th><td class="yes">0件</td><td>間違った場所に、気づかないまま保存されるのが一番のリスクのため</td></tr>
+          <tr><th scope="row">要確認に回った割合</th><td>2割以下</td><td>これを超えると、手作業の削減効果が小さくなるため</td></tr>
+          <tr><th scope="row">1件あたりの処理時間</th><td>職員を待たせない程度</td><td>AIを使うのは迷った書類だけなので、大半は待ち時間なし</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" id="faq" aria-labelledby="faq-title">
+    <h2 id="faq-title">よくある質問</h2>
+    <div class="faq">
+      <details><summary>本当に、書類の中身は外に出ないのですか?</summary>
+        <p>ローカルAI版は、AIへの通信先を「このパソコン自身」に限定し、外部の住所を指定してもプログラムが通信を止めます。このことは、プログラムを直すたびに自動テストで確かめています。さらに確実にしたい場合は、パソコンのファイアウォールで外部通信を止める設定も併用できます。</p></details>
+      <details><summary>クラウドのAI(ChatGPTなど)のほうが、精度は高いのでは?</summary>
+        <p>その可能性はあります。ただし、顧問先の書類を事務所の外へ送ることになり、守秘義務や契約条件の確認が必要です。この提案では精度よりも「中身を外に出さない」ことを優先し、ローカルAIと人の確認を組み合わせています。</p></details>
+      <details><summary>読み取りを間違えたら、どうなりますか?</summary>
+        <p>自信がない書類は自動で移動せず「要確認」にします。AIの答えも、根拠の文章をPDFと照合して確かめられたものだけを使います。導入前に精度を測り、「誤って自動仕分け」が0件になるまで調整します。</p></details>
+      <details><summary>うちの事務所の帳票やフォルダ構成でも使えますか?</summary>
+        <p>フォルダ名・ファイル名の付け方、顧問先マスタ、書類種別は、プログラムを書き換えずに画面の「設定」で合わせられます。要確認の書類を確定するときに帳票の表題を覚えるので、使うほど事務所の帳票に合っていきます。</p></details>
+      <details><summary>スキャンした紙の書類も扱えますか?</summary>
+        <p>ページを画像(JPEG)で保存するスキャナーのPDFなら、パソコン内の画像を読めるAIで文字起こしします。読み間違いに備え、項目を入力した状態で「要確認」にして、人が確認してから確定します。白黒2値の保存形式には、まだ対応していません。</p></details>
+      <details><summary>どんなパソコンが必要ですか?</summary>
+        <p>メモリ16GB以上を目安にしています。必要なメモリは資料によって8〜16GB以上と幅があるため、余裕を見た数字です。試験運用で、実際の速度を確かめます。</p></details>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="src-title">
+    <h2 id="src-title">根拠とした情報</h2>
+    <p class="lead"><span class="mark fact">事実</span> 出典のある情報 <span class="mark guess">仮定</span> 提案者の仮置き・推測。仮定の数字は、試験運用で確かめます。</p>
+    <ol class="sources">
+      <li><span class="mark fact">事実</span> ローカルAI(Ollama)は、パソコン内のアドレスで動き、回答の形を指定できる:<a href="https://docs.ollama.com/capabilities/structured-outputs" target="_blank" rel="noopener">Ollama 公式 Structured outputs</a></li>
+      <li><span class="mark fact">事実</span> Ollama は画像を読めるモデルに画像を渡せる:<a href="https://docs.ollama.com/capabilities/vision" target="_blank" rel="noopener">Ollama 公式 Vision</a></li>
+      <li><span class="mark fact">事実</span> Google Apps Script で外部と通信するには専用の権限が必要:<a href="https://developers.google.com/apps-script/reference/url-fetch/url-fetch-app" target="_blank" rel="noopener">Google Apps Script UrlFetchApp</a></li>
+      <li><span class="mark fact">事実</span> Google Workspace のデータは、許可なく生成AIの学習に使われない(法人向けの約束):<a href="https://support.google.com/a/answer/15706919?hl=en" target="_blank" rel="noopener">Generative AI in Google Workspace Privacy Hub</a></li>
+      <li><span class="mark fact">事実</span> 個人情報保護委員会による、生成AIサービス利用時の注意喚起(2023年6月):<a href="https://scan.netsecurity.ne.jp/article/2023/06/13/49506.html" target="_blank" rel="noopener">ScanNetSecurity の報道</a></li>
+      <li><span class="mark fact">事実</span> 税理士の守秘義務(税理士法第38条):<a href="https://ja.wikibooks.org/wiki/%E7%A8%8E%E7%90%86%E5%A3%AB%E6%B3%95%E7%AC%AC38%E6%9D%A1" target="_blank" rel="noopener">ウィキブックス 税理士法第38条</a></li>
+      <li><span class="mark guess">仮定</span> パソコンのメモリの目安(資料によって幅あり):<a href="https://www.storagereview.com/best/agentic-ai-hardware" target="_blank" rel="noopener">StorageReview</a>、<a href="https://valebyte.com/en/blog/ollama-server-requirements-ram-vram-and-cpu-by-model-size/" target="_blank" rel="noopener">valebyte</a></li>
+    </ol>
+  </section>
+
+  <footer>
+    ※ このページとデモに出てくる会社名・金額・書類は、すべて架空のサンプルです。特定の会計ソフトの帳票を再現したものではありません。<br>
+    ※ デモ画面はルールだけで動いています。ローカルAIを使う版は、事務所のパソコンに入れて使います。
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function calc() {
+    var n = Math.max(0, +$('c-count').value || 0);
+    var m = Math.max(0, +$('c-min').value || 0);
+    var rate = Math.min(100, Math.max(0, +$('c-rate').value || 0)) / 100;
+    var chk = Math.max(0, +$('c-check').value || 0);
+    var before = n * m / 60;
+    var after = n * (1 - rate) * chk / 60;
+    var f = function (x) { return (Math.round(x * 10) / 10).toLocaleString('ja-JP'); };
+    $('o-before').textContent = f(before);
+    $('o-after').textContent = f(after);
+    $('o-save').textContent = f(Math.max(0, before - after));
+    $('o-year').textContent = f(Math.max(0, before - after) * 12);
+  }
+  ['c-count', 'c-min', 'c-rate', 'c-check'].forEach(function (id) { $(id).addEventListener('input', calc); });
+  calc();
+})();
+</script>
