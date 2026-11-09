@@ -198,10 +198,43 @@ var TaxDocExtractor = (function () {
   // ------------------------------------------------------------
   // 書類種別の判定(キーワードの点数制)
   // ------------------------------------------------------------
-  function detectDocType(lines, flat) {
+  // ------------------------------------------------------------
+  // 事務所ごとの書類種別(options.docTypes)を、標準の一覧に重ねる
+  //  ・同じ名前 → 目印の言葉を追加し、期間の種類などを上書き
+  //  ・新しい名前 → 書類種別として追加
+  //  ・disabled: true → その書類種別を使わない
+  // ------------------------------------------------------------
+  function uniq(list) {
+    var out = [];
+    list.forEach(function (x) { if (x && out.indexOf(x) < 0) out.push(x); });
+    return out;
+  }
+  function typesFor(options) {
+    var custom = (options && options.docTypes) || [];
+    var list = DOC_TYPES.map(function (d) {
+      return { id: d.id, name: d.name, titleWords: (d.titleWords || []).slice(), keywords: d.keywords.slice(), amountLabels: d.amountLabels.slice(), periodKind: d.periodKind };
+    });
+    custom.forEach(function (c) {
+      if (!c || !c.name) return;
+      var t = null;
+      for (var i = 0; i < list.length; i++) if (list[i].name === c.name) t = list[i];
+      if (c.disabled) { list = list.filter(function (x) { return x.name !== c.name; }); return; }
+      if (!t) {
+        t = { id: 'custom_' + list.length, name: c.name, titleWords: [], keywords: [], amountLabels: [], periodKind: 'month' };
+        list.push(t);
+      }
+      t.titleWords = uniq(t.titleWords.concat(c.titleWords || []));
+      t.keywords = uniq(t.keywords.concat(c.keywords || []));
+      t.amountLabels = uniq((c.amountLabels || []).concat(t.amountLabels));
+      if (c.periodKind) t.periodKind = c.periodKind;
+    });
+    return list;
+  }
+
+  function detectDocType(lines, flat, types) {
     var title = compact(lines.slice(0, 2).join(''));
     var head = compact(lines.slice(0, 6).join(''));
-    var scores = DOC_TYPES.map(function (dt) {
+    var scores = (types || DOC_TYPES).map(function (dt) {
       var score = 0, hits = [];
       // 表題に「試算表」「決算報告書」などがあれば、それを最優先する
       for (var t = 0; t < (dt.titleWords || []).length; t++) {
@@ -429,7 +462,19 @@ var TaxDocExtractor = (function () {
     return endYear + '年' + fiscalEndMonth + '月期';
   }
 
-  function buildNames(r, client) {
+  // ファイル名・フォルダ名の付け方(事務所ごとに変えられる)
+  //  {顧問先}=コード_名前 {顧問先コード} {顧問先名} {年度} {期間} {書類種別}
+  var DEFAULT_NAMING = { folder: '{顧問先}/{年度}/{書類種別}', file: '{顧問先}_{期間}_{書類種別}' };
+
+  function fill(template, vars) {
+    return String(template).replace(/\{(顧問先コード|顧問先名|顧問先|年度|期間|書類種別)\}/g, function (m, k) { return vars[k] || ''; });
+  }
+  // フォルダの外に出るような名前(「..」など)にならないよう整える
+  function safePart(s) {
+    return safe(s).replace(/^[.\s]+/, '').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  }
+
+  function buildNames(r, client, naming) {
     var p = r.period;
     var periodPart = '期間不明';
     var yearFolder = '年度不明';
@@ -456,10 +501,15 @@ var TaxDocExtractor = (function () {
     }
     var clientPart = (r.clientCode ? r.clientCode + '_' : '') + (r.clientName || '顧問先不明');
     var docPart = r.docType || '種別不明';
-    return {
-      fileName: safe(clientPart) + '_' + safe(periodPart) + '_' + safe(docPart) + '.pdf',
-      folder: [safe(clientPart), safe(yearFolder), safe(docPart)]
+    naming = naming || {};
+    var vars = {
+      '顧問先': safe(clientPart), '顧問先コード': safe(r.clientCode || 'コード不明'), '顧問先名': safe(r.clientName || '顧問先不明'),
+      '年度': safe(yearFolder), '期間': safe(periodPart), '書類種別': safe(docPart)
     };
+    var folder = String(naming.folder || DEFAULT_NAMING.folder).split(/[\/\\]/).map(function (t) { return safePart(fill(t, vars)); })
+      .filter(function (x) { return x; });
+    var file = safePart(fill(naming.file || DEFAULT_NAMING.file, vars)) || safePart(fill(DEFAULT_NAMING.file, vars));
+    return { fileName: file + '.pdf', folder: folder };
   }
 
   // ------------------------------------------------------------
@@ -477,7 +527,8 @@ var TaxDocExtractor = (function () {
     var addIssue = function (code, msg) { issueCodes.push(code); issues.push(msg); };
 
     // 書類種別
-    var ranking = detectDocType(lines, flat);
+    var types = typesFor(options);
+    var ranking = detectDocType(lines, flat, types);
     var top = ranking[0], second = ranking[1];
     var docType = top && top.score > 0 ? top.type : null;
     if (!docType) addIssue('type_missing', '書類種別を判定できません');
@@ -539,7 +590,7 @@ var TaxDocExtractor = (function () {
       result.issueCodes.push('low_text');
       result.status = '要確認';
     }
-    var names = buildNames(result, master);
+    var names = buildNames(result, master, options.naming);
     result.suggestedFileName = names.fileName;
     result.suggestedFolder = names.folder;
     return result;
@@ -554,10 +605,11 @@ var TaxDocExtractor = (function () {
     return m ? { y: +m[1], m: +m[2], d: m[3] ? +m[3] : null } : null;
   }
 
-  function suggestNames(fields, client) {
+  function suggestNames(fields, client, options) {
+    var types = typesFor(options);
     var dt = null;
-    for (var i = 0; i < DOC_TYPES.length; i++) {
-      if (DOC_TYPES[i].name === fields.docType) dt = DOC_TYPES[i];
+    for (var i = 0; i < types.length; i++) {
+      if (types[i].name === fields.docType) dt = types[i];
     }
     var s = parseYmd(fields.periodStart), e = parseYmd(fields.periodEnd);
     var period = null;
@@ -574,7 +626,7 @@ var TaxDocExtractor = (function () {
       clientCode: fields.clientCode ? String(fields.clientCode) : '',
       clientName: fields.clientName || '',
       docType: fields.docType || ''
-    }, client);
+    }, client, options && options.naming);
   }
 
   // ------------------------------------------------------------
@@ -594,6 +646,8 @@ var TaxDocExtractor = (function () {
     normalize: normalize,
     compact: compact,
     nameKey: nameKey,
+    typesFor: typesFor,
+    DEFAULT_NAMING: DEFAULT_NAMING,
     DOC_TYPES: DOC_TYPES
   };
 })();

@@ -117,3 +117,36 @@ for (const [name, text, exp] of CASES) {
     if (exp.folder) assert.strictEqual(r.suggestedFolder[1], exp.folder);
   });
 }
+
+// ---- 事務所ごとのカスタマイズ ----
+test('事務所独自の書類種別を追加できる', () => {
+  const text = '経営計画書\n顧問先名:株式会社さくら建設\n令和7年3月期';
+  assert.strictEqual(X.extract(text, { clients: CLIENTS }).status, '要確認');
+  const opts = { clients: CLIENTS, docTypes: [{ name: '経営計画書', titleWords: ['経営計画書'], periodKind: 'fiscal' }] };
+  const r = X.extract(text, opts);
+  assert.strictEqual(r.status, 'OK', r.issues.join());
+  assert.strictEqual(r.suggestedFileName, '10001_株式会社さくら建設_2025年3月期_経営計画書.pdf');
+});
+
+test('標準の書類種別に、事務所の帳票の表題を目印として足せる', () => {
+  const text = '損益推移表(当月)\n顧問先名:株式会社さくら建設\n令和7年3月分';
+  assert.strictEqual(X.extract(text, { clients: CLIENTS }).docType, '');
+  const r = X.extract(text, { clients: CLIENTS, docTypes: [{ name: '月次試算表', titleWords: ['損益推移表'] }] });
+  assert.strictEqual(r.docType, '月次試算表');
+});
+
+test('使わない書類種別を外せる', () => {
+  const r = X.extract('請求書\n株式会社さくら建設 御中\n令和7年3月分', { clients: CLIENTS, docTypes: [{ name: '請求書', disabled: true }] });
+  assert.strictEqual(r.docType, '');
+});
+
+test('フォルダ名・ファイル名の付け方を事務所ごとに変えられる', () => {
+  const naming = { folder: '{顧問先名}/{書類種別}/{年度}', file: '{期間}_{書類種別}_{顧問先コード}' };
+  const r = X.extract('月次試算表\n顧問先コード:10001\n顧問先名:株式会社さくら建設\n令和7年3月分', { clients: CLIENTS, naming });
+  assert.deepStrictEqual(r.suggestedFolder, ['株式会社さくら建設', '月次試算表', '2025年3月期']);
+  assert.strictEqual(r.suggestedFileName, '2025-03_月次試算表_10001.pdf');
+  // フォルダの外を指す名前は作らない
+  const evil = X.suggestNames({ clientCode: '1', clientName: 'A', docType: '決算書', periodEnd: '2025-03-31' }, null, { naming: { folder: '../../{書類種別}', file: '../{期間}' } });
+  assert.ok(evil.folder.every((p) => p && !p.startsWith('.')), JSON.stringify(evil));
+  assert.ok(!evil.fileName.startsWith('.'));
+});

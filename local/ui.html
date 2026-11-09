@@ -74,7 +74,28 @@ td.nowrap { white-space: nowrap; }
 .preview-name { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
+.office { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.tabs { display: flex; gap: 6px; }
+.tab { font-weight: 700; }
+.tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 10px 14px; }
+.learn { display: grid; gap: 6px; background: var(--accent-soft); border-radius: 4px; padding: 8px 10px; }
+.learn label { display: flex; gap: 6px; align-items: flex-start; color: var(--ink); font-size: 12.5px; }
+.settings { display: grid; gap: 16px; }
+.set-body { padding: 12px 14px; display: grid; gap: 10px; }
+.set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+.set-grid label, .set-body > label { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+.set-grid input, .set-grid select, .set-body > label input { width: 100%; }
+.check { display: flex !important; gap: 6px; align-items: center; color: var(--ink) !important; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 2px 8px; }
+.preview-box { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+table.edit { min-width: 640px; }
+table.edit td { padding: 4px 6px; }
+table.edit input, table.edit select { width: 100%; }
+.save-bar { position: sticky; bottom: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 @media (max-width: 900px) {
+  .set-grid { grid-template-columns: minmax(0, 1fr); }
   .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .status > div:nth-child(2) { border-right: 0; }
   .review, .review-body { grid-template-columns: minmax(0, 1fr); }
@@ -86,9 +107,16 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
 <body>
 <div class="wrap">
   <header>
-    <h1>PDF仕分けアシスタント(ローカル版)</h1>
-    <span class="local-badge">このパソコンの中だけで動作しています</span>
+    <div><h1>PDF仕分けアシスタント(ローカル版)</h1><div class="office" id="office-name"></div></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" id="tab-main" aria-selected="true">仕分け</button>
+      <button type="button" class="tab" role="tab" id="tab-settings" aria-selected="false">設定</button>
+      <span class="local-badge">このパソコンの中だけで動作しています</span>
+    </div>
   </header>
+  <p class="banner" id="first-run" hidden>はじめに「設定」で、事務所名・フォルダ・顧問先マスタを登録してください。登録したら「設定を保存」を押します。</p>
+
+  <div id="view-main">
 
   <section class="panel" aria-label="状態">
     <div class="status">
@@ -121,6 +149,54 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
     <div id="review"><p class="empty">要確認の書類はありません。</p></div>
   </section>
 
+  </div>
+
+  <div id="view-settings" class="settings" hidden>
+    <section class="panel"><div class="panel-head"><h2>事務所とフォルダ</h2></div>
+      <div class="set-body"><div class="set-grid">
+        <label for="s-office">事務所名(画面の上に表示します)<input id="s-office" type="text" placeholder="例:〇〇会計事務所"></label>
+        <label for="s-auto">自動実行(画面を開いている間)<select id="s-auto"><option value="0">しない</option><option value="15">15分ごと</option><option value="30">30分ごと</option><option value="60">60分ごと</option></select></label>
+        <label for="s-inbox">受付フォルダ(PDFを入れる場所)<input id="s-inbox" type="text"></label>
+        <label for="s-archive">保存先フォルダ(仕分けたPDFと一覧表を置く場所)<input id="s-archive" type="text"></label>
+      </div><p class="hint" style="margin:0">フォルダの場所は、エクスプローラーやFinderでフォルダを開き、場所(パス)をコピーして貼り付けてください。無いフォルダは作ります。</p></div>
+    </section>
+
+    <section class="panel"><div class="panel-head"><h2>フォルダ名・ファイル名の付け方</h2><span class="hint">事務所のいつもの付け方に合わせられます</span></div>
+      <div class="set-body">
+        <div class="chips" id="placeholders"></div>
+        <div class="set-grid">
+          <label for="s-folder">フォルダ(「/」で区切ると、その下にフォルダを作ります)<input id="s-folder" type="text"></label>
+          <label for="s-file">ファイル名(「.pdf」は自動で付きます)<input id="s-file" type="text"></label>
+        </div>
+        <div class="preview-box" id="naming-preview">見本:―</div>
+      </div>
+    </section>
+
+    <section class="panel"><div class="panel-head"><h2>顧問先マスタ</h2>
+        <div class="btns"><label class="hint" for="s-csv">CSVから読み込む <input id="s-csv" type="file" accept=".csv,text/csv"></label><button type="button" id="btn-add-client">顧問先を追加</button></div></div>
+      <div class="scroll"><table class="edit"><thead><tr><th>顧問先コード</th><th>顧問先名(正式名称)</th><th>別名(「、」区切り)</th><th>決算月</th><th></th></tr></thead><tbody id="s-clients"></tbody></table></div>
+      <p class="hint" style="margin:6px 14px 12px">CSVの列:顧問先コード,顧問先名,別名,決算月(1行目は見出し)。別名には、書類に出てくる略称(例:さくら建設)を入れると読み取りやすくなります。</p>
+    </section>
+
+    <section class="panel"><div class="panel-head"><h2>書類種別</h2><button type="button" id="btn-add-type">書類種別を追加</button></div>
+      <div class="scroll"><table class="edit"><thead><tr><th>使う</th><th>書類種別</th><th>期間の種類</th><th>表題の目印(追加分。「、」区切り)</th></tr></thead><tbody id="s-types"></tbody></table></div>
+      <p class="hint" style="margin:6px 14px 12px">「表題の目印」は、帳票のいちばん上に書かれているタイトルの言葉です(例:損益推移表)。要確認の書類を確定するときに「覚える」を選ぶと、ここに自動で増えます。</p>
+    </section>
+
+    <section class="panel"><div class="panel-head"><h2>ローカルAI と スキャンした書類</h2><span class="hint">AIはこのパソコンの中でだけ動きます</span></div>
+      <div class="set-body"><div class="set-grid">
+        <label for="s-ai-mode">ローカルAIの使い方<select id="s-ai-mode">
+          <option value="fallback">ルールで迷った書類だけに使う(おすすめ)</option><option value="always">すべての書類で確認させる</option><option value="off">使わない</option></select></label>
+        <label for="s-ai-model">文字を読むモデル(Ollamaのモデル名)<input id="s-ai-model" type="text"></label>
+        <label class="check" for="s-ocr"><input id="s-ocr" type="checkbox"> スキャンした紙の書類(画像のPDF)を、ローカルAIで文字起こしする</label>
+        <label for="s-ocr-model">画像を読むモデル(Ollamaのモデル名)<input id="s-ocr-model" type="text"></label>
+        <label class="check" for="s-ocr-auto"><input id="s-ocr-auto" type="checkbox"> 文字起こしした書類も、自動で仕分ける(おすすめしません。読み間違いに気づけないため)</label>
+      </div></div>
+    </section>
+
+    <div class="save-bar"><button type="button" class="primary" id="btn-save">設定を保存</button><span class="hint" id="save-msg"></span></div>
+  </div>
+
   <footer>
     ・PDFの読み取り、AIでの補完、ファイルの移動は、すべてこのパソコンの中で行います。外部への送信はしません。<br>
     ・AIの答えは、根拠の文章がPDFに書かれているかを確かめてから使います。確かめられないものは「要確認」になります。<br>
@@ -134,7 +210,7 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
   var TOKEN = '__TOKEN__';
   var $ = function (id) { return document.getElementById(id); };
   var info = { clients: [], docTypes: [] };
-  var reviewItems = [], current = null, forceFile = null;
+  var reviewItems = [], current = null, forceFile = null, shownFirst = false;
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
@@ -176,6 +252,9 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
   function loadStatus() {
     return api('GET', '/api/status').then(function (s) {
       info = s;
+      $('office-name').textContent = s.office && s.office.name ? s.office.name : '';
+      $('first-run').hidden = !s.firstRun;
+      if (s.firstRun && !shownFirst) { shownFirst = true; showTab('settings'); }
       $('st-inbox').textContent = s.inboxCount == null ? 'フォルダが見つかりません' : 'PDF ' + s.inboxCount + ' 件';
       $('st-inbox').className = s.inboxCount == null ? 'ng-text' : '';
       $('st-inbox-path').textContent = s.inbox;
@@ -246,6 +325,18 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
     }).join('');
   }
 
+  // 確定するときに「覚える」もの(次から自動で読めるようにする)
+  function learnBlock(it) {
+    var parts = [];
+    if (it.title) {
+      parts.push('<label for="learn-title"><input id="learn-title" type="checkbox"' + (it.docType ? '' : ' checked') + '> この帳票の表題「' + esc(it.title) + '」を、選んだ書類種別の目印として覚える</label>');
+    }
+    if (it.aliasCandidate) {
+      parts.push('<label for="learn-alias"><input id="learn-alias" type="checkbox" checked> 書類に書かれた「' + esc(it.aliasCandidate) + '」を、選んだ顧問先の別名として覚える</label>');
+    }
+    return parts.length ? '<div class="learn"><b style="font-size:12.5px">次から自動で読めるように</b>' + parts.join('') + '</div>' : '';
+  }
+
   function renderReview() {
     var it = reviewItems.filter(function (x) { return x.file === current; })[0];
     var list = reviewItems.map(function (x) {
@@ -260,6 +351,7 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
       '<label for="f-client">顧問先<select id="f-client">' + options(info.clients, it.clientCode) + '</select></label>' +
       '<label for="f-start">対象期間(開始)<input id="f-start" type="date" value="' + esc(it.periodStart) + '"></label>' +
       '<label for="f-end">対象期間(終了)<input id="f-end" type="date" value="' + esc(it.periodEnd) + '"></label>' +
+      learnBlock(it) +
       '<div class="btns"><button type="button" class="primary" id="btn-confirm">確定して仕分ける</button>' +
       '<button type="button" class="danger" id="btn-exclude">重複・不要として除外</button></div>' +
       '<p class="hint" style="margin:0">「除外」は削除ではなく、「_重複(削除候補)」フォルダへ移すだけです。</p>' +
@@ -268,7 +360,8 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
       b.addEventListener('click', function () { current = b.getAttribute('data-file'); forceFile = null; msg('review-msg', '', true); renderReview(); });
     });
     $('btn-confirm').addEventListener('click', function () {
-      var body = { file: it.file, docType: $('f-type').value, clientCode: $('f-client').value, periodStart: $('f-start').value, periodEnd: $('f-end').value, force: forceFile === it.file };
+      var body = { file: it.file, docType: $('f-type').value, clientCode: $('f-client').value, periodStart: $('f-start').value, periodEnd: $('f-end').value, force: forceFile === it.file,
+        learnTitle: !!($('learn-title') && $('learn-title').checked), learnAlias: $('learn-alias') && $('learn-alias').checked ? it.aliasCandidate : '' };
       api('POST', '/api/confirm', body).then(function (r) {
         if (r.needsForce) { forceFile = it.file; msg('review-msg', r.message, false); return; }
         forceFile = null;
@@ -281,6 +374,136 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
         .catch(function (e) { msg('review-msg', e.message, false); });
     });
   }
+
+  // ---------- タブ ----------
+  function showTab(which) {
+    var main = which === 'main';
+    $('tab-main').setAttribute('aria-selected', String(main));
+    $('tab-settings').setAttribute('aria-selected', String(!main));
+    $('view-main').hidden = !main;
+    $('view-settings').hidden = main;
+    if (!main) loadSettings();
+  }
+  $('tab-main').addEventListener('click', function () { showTab('main'); });
+  $('tab-settings').addEventListener('click', function () { showTab('settings'); });
+
+  // ---------- 設定 ----------
+  var settings = null;
+  var PLACEHOLDERS = ['{顧問先}', '{顧問先コード}', '{顧問先名}', '{年度}', '{期間}', '{書類種別}'];
+  var lastNamingInput = null;
+
+  function clientRow(c) {
+    return '<tr><td><input type="text" class="c-code" value="' + esc(c.code || '') + '" aria-label="顧問先コード"></td>' +
+      '<td><input type="text" class="c-name" value="' + esc(c.name || '') + '" aria-label="顧問先名"></td>' +
+      '<td><input type="text" class="c-alias" value="' + esc((c.aliases || []).join('、')) + '" aria-label="別名"></td>' +
+      '<td><select class="c-fem" aria-label="決算月"><option value="">―</option>' +
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(function (m) { return '<option value="' + m + '"' + (+c.fiscalEndMonth === m ? ' selected' : '') + '>' + m + '月</option>'; }).join('') +
+      '</select></td><td><button type="button" class="c-del">削除</button></td></tr>';
+  }
+  function typeRow(t) {
+    var kinds = settings.periodKinds;
+    return '<tr data-builtin="' + (t.builtIn ? '1' : '') + '"><td><input type="checkbox" class="t-on"' + (t.enabled ? ' checked' : '') + ' aria-label="使う"></td>' +
+      '<td>' + (t.builtIn ? esc(t.name) + '<input type="hidden" class="t-name" value="' + esc(t.name) + '">' : '<input type="text" class="t-name" value="' + esc(t.name) + '" aria-label="書類種別の名前">') + '</td>' +
+      '<td>' + (t.builtIn ? esc(kinds[t.periodKind] || '') : '<select class="t-kind" aria-label="期間の種類">' + Object.keys(kinds).map(function (k) {
+        return '<option value="' + k + '"' + (t.periodKind === k ? ' selected' : '') + '>' + esc(kinds[k]) + '</option>'; }).join('') + '</select>') + '</td>' +
+      '<td><input type="text" class="t-words" value="' + esc((t.extraTitleWords || []).join('、')) + '" aria-label="表題の目印"></td></tr>';
+  }
+  function bindRows() {
+    document.querySelectorAll('.c-del').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; });
+  }
+  function preview() {
+    var q = '?folder=' + encodeURIComponent($('s-folder').value) + '&file=' + encodeURIComponent($('s-file').value);
+    api('GET', '/api/naming-preview' + q).then(function (r) {
+      $('naming-preview').textContent = '見本:' + r.folder + ' / ' + r.file;
+    }).catch(function () {});
+  }
+  function loadSettings() {
+    api('GET', '/api/settings').then(function (s) {
+      settings = s;
+      $('s-office').value = s.office.name || '';
+      $('s-inbox').value = s.inbox; $('s-archive').value = s.archive;
+      $('s-folder').value = s.naming.folder; $('s-file').value = s.naming.file;
+      $('s-auto').value = String(s.autoRunMinutes || 0);
+      $('s-ai-mode').value = s.ai.mode; $('s-ai-model').value = s.ai.model;
+      $('s-ocr').checked = s.ocr.enabled; $('s-ocr-model').value = s.ocr.model; $('s-ocr-auto').checked = s.ocr.autoApprove;
+      $('s-clients').innerHTML = (s.clients.length ? s.clients : [{}]).map(clientRow).join('');
+      $('s-types').innerHTML = s.docTypes.map(typeRow).join('');
+      $('placeholders').innerHTML = '<span class="hint">差し込める項目:</span>' + PLACEHOLDERS.map(function (p) { return '<button type="button" class="chip" data-ph="' + p + '">' + p + '</button>'; }).join('');
+      document.querySelectorAll('[data-ph]').forEach(function (b) {
+        b.onclick = function () {
+          var el = lastNamingInput || $('s-file');
+          var pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+          var before = el.value.slice(0, pos);
+          // 項目の間に区切り(ファイル名は「_」、フォルダは「/」)を自動で入れる
+          var sep = before && !/[_\/\-]$/.test(before) ? (el.id === 's-folder' ? '/' : '_') : '';
+          el.value = before + sep + b.getAttribute('data-ph') + el.value.slice(el.selectionEnd == null ? pos : el.selectionEnd);
+          el.focus(); preview();
+        };
+      });
+      bindRows(); preview();
+    }).catch(function (e) { $('save-msg').textContent = e.message; });
+  }
+  ['s-folder', 's-file'].forEach(function (id) {
+    $(id).addEventListener('input', preview);
+    $(id).addEventListener('focus', function () { lastNamingInput = $(id); });
+  });
+  $('btn-add-client').addEventListener('click', function () { $('s-clients').insertAdjacentHTML('beforeend', clientRow({})); bindRows(); });
+  $('btn-add-type').addEventListener('click', function () {
+    $('s-types').insertAdjacentHTML('beforeend', typeRow({ name: '', builtIn: false, periodKind: 'month', extraTitleWords: [], enabled: true }));
+  });
+  // 顧問先マスタのCSVを読み込む(読み込みはこのパソコンの中だけ)
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', q = false;
+    text = text.replace(/^\uFEFF/, '');
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n') { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (c) { return c.trim(); }); });
+  }
+  $('s-csv').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var rows = parseCsv(String(reader.result));
+      var body = /コード|名/.test((rows[0] || []).join('')) ? rows.slice(1) : rows;
+      $('s-clients').innerHTML = body.map(function (r) {
+        return clientRow({ code: (r[0] || '').trim(), name: (r[1] || '').trim(), aliases: (r[2] || '').split(/[;、]/).filter(Boolean), fiscalEndMonth: r[3] });
+      }).join('');
+      bindRows();
+      $('save-msg').textContent = body.length + ' 社を読み込みました。「設定を保存」で確定します';
+    };
+    reader.readAsText(f, 'utf-8');
+    e.target.value = '';
+  });
+  $('btn-save').addEventListener('click', function () {
+    var clients = Array.prototype.map.call(document.querySelectorAll('#s-clients tr'), function (tr) {
+      return { code: tr.querySelector('.c-code').value, name: tr.querySelector('.c-name').value,
+        aliases: tr.querySelector('.c-alias').value, fiscalEndMonth: tr.querySelector('.c-fem').value };
+    });
+    var docTypes = Array.prototype.map.call(document.querySelectorAll('#s-types tr'), function (tr) {
+      var kind = tr.querySelector('.t-kind');
+      return { name: tr.querySelector('.t-name').value, enabled: tr.querySelector('.t-on').checked,
+        periodKind: kind ? kind.value : '', extraTitleWords: tr.querySelector('.t-words').value };
+    });
+    var body = { settings: {
+      office: { name: $('s-office').value }, inbox: $('s-inbox').value, archive: $('s-archive').value,
+      naming: { folder: $('s-folder').value, file: $('s-file').value }, autoRunMinutes: +$('s-auto').value,
+      ai: { mode: $('s-ai-mode').value, model: $('s-ai-model').value },
+      ocr: { enabled: $('s-ocr').checked, model: $('s-ocr-model').value, autoApprove: $('s-ocr-auto').checked },
+      docTypes: docTypes }, clients: clients };
+    $('save-msg').textContent = '保存しています…';
+    api('POST', '/api/settings', body).then(function (r) {
+      $('save-msg').textContent = r.message + (r.notes && r.notes.length ? '。' + r.notes.join('。') : '');
+      return loadStatus().then(loadSettings);
+    }).catch(function (e) { $('save-msg').textContent = e.message; });
+  });
 
   loadStatus();
   loadReview();

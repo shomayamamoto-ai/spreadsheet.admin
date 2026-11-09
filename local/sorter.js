@@ -17,6 +17,7 @@ const { lockdownNetwork } = require('./guard.js');
 const X = require('../src/extractor.js');
 const PdfText = require('../src/pdftext.js');
 const AI = require('./ai.js');
+const OCR = require('./ocr.js');
 
 const LOG_NAME = '書類一覧.csv';
 const REVIEW = '_要確認';
@@ -130,22 +131,67 @@ function loadConfig(configPath) {
     archive: abs(cfg.archive),
     clientsFile: cfg.clients ? abs(cfg.clients) : '',
     ai: Object.assign({ mode: 'fallback', url: 'http://127.0.0.1:11434', model: 'qwen3:8b' }, cfg.ai || {}),
+    ocr: Object.assign({ enabled: false, model: 'qwen2.5vl:7b', maxPages: 2, timeoutSec: 300 }, cfg.ocr || {}),
+    office: Object.assign({ name: '' }, cfg.office || {}),
+    // 事務所ごとの書類種別・名前の付け方(画面の「設定」や、確定時の学習で増える)
+    rules: { docTypes: cfg.docTypes || [], naming: Object.assign({}, X.DEFAULT_NAMING, cfg.naming || {}) },
     autoRunMinutes: cfg.autoRunMinutes || 0
   };
 }
 
 // ---------------- 1件の処理(テストからも呼べる) ----------------
-async function analyze(text, ctx) {
-  const rule = X.extract(text, { clients: ctx.clients });
+async function analyzeText(text, ctx) {
+  const rules = ctx.rules || {};
+  const rule = X.extract(text, { clients: ctx.clients, docTypes: rules.docTypes, naming: rules.naming });
   const mode = ctx.ai.mode || 'fallback';
   let answer = null, aiError = '';
   const useAI = ctx.aiReady && (mode === 'always' || (mode === 'fallback' && rule.status !== 'OK'));
   if (useAI) {
-    try { answer = await AI.askLocalAI(text, ctx.clients, ctx.ai); }
+    try { answer = await AI.askLocalAI(text, ctx.clients, ctx.ai, rules); }
     catch (e) { aiError = 'ローカルAIの読み取りに失敗:' + e.message; }
   }
-  const r = AI.merge(rule, answer, text, ctx.clients);
+  const r = AI.merge(rule, answer, text, ctx.clients, rules);
   if (aiError) { r.issues.push(aiError); r.status = '要確認'; }
+  return r;
+}
+
+const isLowText = (text) => X.compact(X.normalize(text || '')).length < 20;
+
+/**
+ * 1件の書類を判定する
+ * text : PDFから取り出した文字 / pdfBytes : PDFそのもの(画像PDFの文字起こしに使う)
+ */
+async function analyze(text, ctx, pdfBytes) {
+  const ocr = ctx.ocr || {};
+  if (!isLowText(text) || !pdfBytes || !ocr.enabled) return analyzeText(text, ctx);
+
+  // ---- 文字の無いPDF(スキャンした紙の書類)----
+  if (!ctx.ocrReady) {
+    const r = await analyzeText(text, ctx);
+    r.issues.push('画像のPDFです。文字起こしには、画像を読めるローカルAIが必要です' + (ctx.ocrReason ? `(${ctx.ocrReason})` : ''));
+    return r;
+  }
+  const images = OCR.extractJpegImages(pdfBytes, ocr.maxPages || 2);
+  if (!images.length) {
+    const r = await analyzeText(text, ctx);
+    r.issues.push('画像のPDFですが、対応していない画像形式のため文字起こしできませんでした');
+    return r;
+  }
+  let ocrText;
+  try { ocrText = await OCR.transcribe(images, ctx.ai, ocr); }
+  catch (e) {
+    const r = await analyzeText(text, ctx);
+    r.issues.push(e.message);
+    return r;
+  }
+  const r = await analyzeText(ocrText, ctx);
+  r.method = (r.method || 'ルール') + '+画像の文字起こし';
+  r.ocr = true;
+  // 文字起こしは読み間違えることがあるため、標準では人の確認を必ず挟む
+  if (!ocr.autoApprove) {
+    r.issues.push('スキャンした書類をローカルAIで文字起こししました。内容が合っているか確認して確定してください');
+    r.status = '要確認';
+  }
   return r;
 }
 
@@ -153,7 +199,7 @@ async function run(opts) {
   lockdownNetwork(); // ここから先、このパソコン以外とは通信できない
   const cfg = loadConfig(opts.config);
   const inbox = cfg.inbox, archive = cfg.archive;
-  const ctx = { clients: loadClients(cfg.clientsFile), ai: cfg.ai };
+  const ctx = { clients: loadClients(cfg.clientsFile), ai: cfg.ai, ocr: cfg.ocr, rules: cfg.rules };
   const log = opts.log || console.log;
 
   if (ctx.ai.mode !== 'off') {
@@ -162,6 +208,12 @@ async function run(opts) {
     log(st.ok ? `ローカルAI:${ctx.ai.model} を使います(${ctx.ai.url})` : `ローカルAI:使えません → ルールだけで判定します(${st.reason})`);
   } else {
     log('ローカルAI:使わない設定です(ルールだけで判定します)');
+  }
+  if (ctx.ocr.enabled) {
+    const st = await OCR.checkVisionModel(ctx.ai, ctx.ocr);
+    ctx.ocrReady = st.ok;
+    ctx.ocrReason = st.reason || '';
+    log(st.ok ? `画像の文字起こし:${ctx.ocr.model} を使います` : `画像の文字起こし:使えません(${st.reason})`);
   }
 
   const pdfjsLib = loadPdfjs();
@@ -174,8 +226,9 @@ async function run(opts) {
     const src = path.join(inbox, f);
     let r;
     try {
-      const text = (await PdfText.extractText(pdfjsLib, new Uint8Array(fs.readFileSync(src)), 5)).text;
-      r = await analyze(text, ctx);
+      const bytes = fs.readFileSync(src);
+      const text = (await PdfText.extractText(pdfjsLib, new Uint8Array(bytes), 5)).text;
+      r = await analyze(text, ctx, bytes);
     } catch (e) {
       r = { status: 'エラー', method: '', issues: ['PDFを読めませんでした:' + e.message], aiFilled: [], suggestedFolder: [], suggestedFileName: '' };
     }

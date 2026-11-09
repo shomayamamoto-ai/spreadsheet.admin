@@ -23,6 +23,8 @@ const S = require('./sorter.js');
 const AI = require('./ai.js');
 const X = require('../src/extractor.js');
 const { lockdownNetwork, isLoopbackHost } = require('./guard.js');
+const ST = require('./settings.js');
+const PdfText = require('../src/pdftext.js');
 
 const DUP_FOLDER = '_重複(削除候補)';
 
@@ -35,15 +37,26 @@ function createServer(configPath) {
   const cfg = () => S.loadConfig(configPath);
 
   // ---------- 一覧(CSV)から、要確認フォルダにある書類の情報を集める ----------
-  function reviewItems() {
+  // PDFの最初の行(帳票の表題)を読む。表題を「覚える」ときに使う
+  let pdfjsLib = null;
+  async function titleOfPdf(p) {
+    try {
+      pdfjsLib = pdfjsLib || S.loadPdfjs();
+      const text = (await PdfText.extractText(pdfjsLib, new Uint8Array(fs.readFileSync(p)), 1)).text;
+      return ST.titleOf(text);
+    } catch (e) { return ''; }
+  }
+
+  async function reviewItems() {
     const c = cfg();
+    const masterNames = S.loadClients(c.clientsFile).reduce((a, x) => a.concat([x.name], x.aliases), []);
     const dir = path.join(c.archive, S.REVIEW);
     if (!fs.existsSync(dir)) return [];
     const logFile = path.join(c.archive, S.LOG_NAME);
     const rows = fs.existsSync(logFile) ? S.parseCsv(fs.readFileSync(logFile, 'utf8')) : [];
     const h = rows[0] || [];
     const get = (r, name) => r[h.indexOf(name)] || '';
-    return fs.readdirSync(dir).filter((f) => /\.pdf$/i.test(f)).sort().map((f) => {
+    const items = fs.readdirSync(dir).filter((f) => /\.pdf$/i.test(f)).sort().map((f) => {
       // 同じファイル名の、いちばん新しい記録を使う
       const r = rows.slice(1).reverse().find((x) => get(x, '新ファイル名') === f && get(x, '保存先フォルダ') === S.REVIEW) || [];
       return {
@@ -54,6 +67,12 @@ function createServer(configPath) {
         originalName: get(r, '元のファイル名') || f, memo: get(r, '確認メモ')
       };
     });
+    for (const it of items) {
+      it.title = await titleOfPdf(path.join(dir, it.file));
+      // 本文から読んだ顧問先名が、マスタに無い呼び方なら「別名として覚える」候補にする
+      it.aliasCandidate = it.clientName && masterNames.indexOf(it.clientName) < 0 ? it.clientName : '';
+    }
+    return items;
   }
 
   function safeReviewPath(file) {
@@ -64,13 +83,13 @@ function createServer(configPath) {
   }
 
   // ---------- 人が確定した内容で、要確認の書類を仕分ける ----------
-  function confirm(body) {
+  async function confirm(body) {
     const c = cfg();
     const src = safeReviewPath(body.file);
     if (!src) throw new UserError('対象のPDFが「_要確認」フォルダに見つかりません');
     const clients = S.loadClients(c.clientsFile);
     const client = clients.find((x) => String(x.code) === String(body.clientCode));
-    const docTypes = X.DOC_TYPES.map((d) => d.name);
+    const docTypes = X.typesFor(c.rules).map((d) => d.name);
     if (docTypes.indexOf(body.docType) < 0) throw new UserError('書類種別を選んでください');
     if (!client) throw new UserError('顧問先を選んでください(顧問先マスタにある顧問先のみ)');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(body.periodEnd || '')) throw new UserError('対象期間(終了)を入れてください');
@@ -81,13 +100,20 @@ function createServer(configPath) {
     if (key && known[key] && !body.force) {
       return { needsForce: true, message: `同じ書類がすでにあります(${known[key]})。別の書類として保存する場合は、もう一度「確定」を押してください。` };
     }
-    const names = X.suggestNames(fields, client);
+    // 覚える(次から自動で読めるようにする)
+    const learned = [];
+    if (body.learnTitle) {
+      const title = await titleOfPdf(src);
+      if (title && ST.learnTitle(configPath, fields.docType, title)) learned.push(`表題「${title}」を「${fields.docType}」の目印として覚えました`);
+    }
+    if (body.learnAlias && ST.learnAlias(configPath, client.code, body.learnAlias)) learned.push(`「${body.learnAlias}」を ${client.code} ${client.name} の別名として覚えました`);
+    const names = X.suggestNames(fields, client, c.rules);
     const destDir = path.join(c.archive, ...names.folder);
     const dest = S.uniquePath(destDir, names.fileName);
     S.moveFile(src, dest);
     S.appendLog(c.archive, [[S.nowText(), '確定済み', '人が確定', fields.docType, fields.clientCode, fields.clientName,
       fields.periodStart, fields.periodEnd, '', '', '', path.basename(dest), path.relative(c.archive, destDir), body.file, '', '']]);
-    return { ok: true, message: `「${path.basename(dest)}」として仕分けました`, dest: path.relative(c.archive, dest) };
+    return { ok: true, message: `「${path.basename(dest)}」として仕分けました` + (learned.length ? '。' + learned.join('。') : ''), dest: path.relative(c.archive, dest), learned };
   }
 
   function exclude(body) {
@@ -121,10 +147,11 @@ function createServer(configPath) {
     const inboxCount = fs.existsSync(c.inbox) ? fs.readdirSync(c.inbox).filter((f) => /\.pdf$/i.test(f)).length : null;
     const ai = c.ai.mode === 'off' ? { ok: false, reason: 'AIを使わない設定です' } : await AI.checkLocalAI(c.ai);
     return {
+      office: c.office, firstRun: !!ST.getSettings(configPath).firstRun,
       inbox: c.inbox, archive: c.archive, inboxCount,
       clients: S.loadClients(c.clientsFile).map((x) => ({ code: x.code, name: x.name })),
-      docTypes: X.DOC_TYPES.map((d) => d.name),
-      docTypeKinds: X.DOC_TYPES.reduce((m, d) => { m[d.name] = d.periodKind; return m; }, {}),
+      docTypes: X.typesFor(c.rules).map((d) => d.name),
+      docTypeKinds: X.typesFor(c.rules).reduce((m, d) => { m[d.name] = d.periodKind; return m; }, {}),
       ai: { mode: c.ai.mode, model: c.ai.model, ok: ai.ok, reason: ai.reason || '' },
       running: state.running, last: state.last,
       autoRunMinutes: state.timer ? state.autoMinutes : 0, nextRunAt: state.nextRunAt
@@ -166,7 +193,15 @@ function createServer(configPath) {
 
       if (req.method === 'GET' && url.pathname === '/') return send(200, ui, 'text/html; charset=utf-8');
       if (req.method === 'GET' && url.pathname === '/api/status') return send(200, await status());
-      if (req.method === 'GET' && url.pathname === '/api/review') return send(200, { items: reviewItems() });
+      if (req.method === 'GET' && url.pathname === '/api/review') return send(200, { items: await reviewItems() });
+      if (req.method === 'GET' && url.pathname === '/api/settings') return send(200, ST.getSettings(configPath));
+      if (req.method === 'GET' && url.pathname === '/api/naming-preview') {
+        // 名前の付け方の見本(画面で入力中の付け方で作る)
+        const naming = { folder: url.searchParams.get('folder') || '', file: url.searchParams.get('file') || '' };
+        const sample = { clientCode: '10001', clientName: '株式会社さくら建設', docType: '月次試算表', periodStart: '2025-03-01', periodEnd: '2025-03-31' };
+        const n = X.suggestNames(sample, { fiscalEndMonth: 3 }, { naming });
+        return send(200, { folder: n.folder.join(' / '), file: n.fileName });
+      }
       if (req.method === 'GET' && url.pathname === '/api/pdf') {
         const p = safeReviewPath(url.searchParams.get('file'));
         if (!p) return send(400, { error: 'このファイルは表示できません' });
@@ -178,16 +213,24 @@ function createServer(configPath) {
         if (!sameToken(req.headers['x-app-token'], token)) return send(403, { error: '画面を開き直してから操作してください' });
         const body = await readJson(req);
         if (url.pathname === '/api/run') return send(200, await runSort(!!body.apply));
-        if (url.pathname === '/api/confirm') return send(200, confirm(body));
+        if (url.pathname === '/api/confirm') return send(200, await confirm(body));
+        if (url.pathname === '/api/settings') {
+          const r = ST.saveSettings(configPath, body.settings || {});
+          const cr = ST.saveClients(configPath, body.clients || []);
+          if (body.settings && body.settings.autoRunMinutes !== undefined) setAuto(body.settings.autoRunMinutes);
+          return send(200, { ok: true, message: `設定を保存しました(顧問先 ${cr.count} 社)`, notes: r.notes });
+        }
         if (url.pathname === '/api/exclude') return send(200, exclude(body));
         if (url.pathname === '/api/auto') return send(200, setAuto(body.minutes));
       }
       return send(404, { error: '見つかりません' });
     } catch (e) {
-      return send(e instanceof UserError ? 400 : 500, { error: e instanceof UserError ? e.message : '処理中にエラーが起きました:' + e.message });
+      const known = e instanceof UserError || e instanceof ST.SettingsError;
+      return send(known ? 400 : 500, { error: known ? e.message : '処理中にエラーが起きました:' + e.message });
     }
   });
   server.on('close', () => clearInterval(state.timer));
+  try { if (cfg().autoRunMinutes) setAuto(cfg().autoRunMinutes); } catch (e) { /* 設定が読めないときは自動実行しない */ }
   return server;
 }
 
@@ -228,10 +271,8 @@ if (require.main === module) {
   const config = i >= 0 ? args[i + 1] : path.join(__dirname, 'config.json');
   const portArg = args.indexOf('--port');
   const port = portArg >= 0 ? parseInt(args[portArg + 1], 10) : 8730;
-  if (!fs.existsSync(config)) {
-    console.error(`設定ファイルが見つかりません:${config}\nlocal/config.sample.json をコピーして local/config.json を作ってください。`);
-    process.exit(1);
-  }
+  // 初回は設定ファイルを標準の内容で作り、画面の「設定」から変えてもらう
+  if (ST.ensureConfig(config).created) console.log(`初回の起動です。設定ファイルを作りました:${config}`);
   const server = createServer(config);
   server.listen(port, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}/`;

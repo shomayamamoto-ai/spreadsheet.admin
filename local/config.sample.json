@@ -1,4 +1,5 @@
 {
+  "office": { "name": "〇〇会計事務所" },
   "inbox": "../work/受付",
   "archive": "../work/書類保管",
   "clients": "顧問先マスタ.sample.csv",
@@ -7,5 +8,21 @@
     "url": "http://127.0.0.1:11434",
     "model": "qwen3:8b",
     "timeoutSec": 180
-  }
+  },
+  "ocr": {
+    "enabled": false,
+    "model": "qwen2.5vl:7b",
+    "autoApprove": false,
+    "maxPages": 2,
+    "timeoutSec": 300
+  },
+  "naming": {
+    "folder": "{顧問先}/{年度}/{書類種別}",
+    "file": "{顧問先}_{期間}_{書類種別}"
+  },
+  "docTypes": [
+    { "name": "月次試算表", "titleWords": ["損益推移表"] },
+    { "name": "経営計画書", "titleWords": ["経営計画書"], "periodKind": "fiscal" }
+  ],
+  "autoRunMinutes": 0
 }

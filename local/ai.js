@@ -67,9 +67,9 @@ async function checkLocalAI(cfg) {
   }
 }
 
-async function askLocalAI(text, clients, cfg) {
+async function askLocalAI(text, clients, cfg, rules) {
   const base = assertLoopback(cfg.url);
-  const docTypes = X.DOC_TYPES.map((d) => d.name);
+  const docTypes = X.typesFor(rules).map((d) => d.name);
   const res = await fetch(new URL('/api/chat', base), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -104,10 +104,10 @@ function validDate(s) {
 }
 
 // AIの答えのうち、確かめられたものだけを返す。rejected には使わなかった理由
-function verifyAI(ai, text, clients) {
+function verifyAI(ai, text, clients, rules) {
   const ok = {}, rejected = [];
   ai = ai || {};
-  const docTypes = X.DOC_TYPES.map((d) => d.name);
+  const docTypes = X.typesFor(rules).map((d) => d.name);
 
   if (ai.docType) {
     if (docTypes.indexOf(ai.docType) < 0) rejected.push('書類種別:候補にない答え');
@@ -142,8 +142,9 @@ function verifyAI(ai, text, clients) {
  * ai   : askLocalAI の答え(使わなかった場合は null)
  * 戻り値: 最終的な値・ステータス・どの項目をAIで補ったか
  */
-function merge(rule, ai, text, clients) {
-  const v = ai ? verifyAI(ai, text, clients) : { ok: {}, rejected: [] };
+function merge(rule, ai, text, clients, rules) {
+  rules = rules || {};
+  const v = ai ? verifyAI(ai, text, clients, rules) : { ok: {}, rejected: [] };
   const issues = [], aiFilled = [];
   const keep = { low_text: true };
   rule.issueCodes.forEach((code, i) => { if (keep[code]) issues.push(rule.issues[i]); });
@@ -181,8 +182,8 @@ function merge(rule, ai, text, clients) {
   if (!periodEnd) issues.push('対象期間が見つかりません');
 
   const client = clients.find((c) => String(c.code) === String(clientCode)) || null;
-  const names = X.suggestNames({ clientCode, clientName, docType, periodStart, periodEnd }, client);
-  const dt = X.DOC_TYPES.find((d) => d.name === docType);
+  const names = X.suggestNames({ clientCode, clientName, docType, periodStart, periodEnd }, client, rules);
+  const dt = X.typesFor(rules).find((d) => d.name === docType);
   return {
     status: issues.length ? '要確認' : 'OK',
     method: ai ? 'ルール+ローカルAI' : 'ルール',

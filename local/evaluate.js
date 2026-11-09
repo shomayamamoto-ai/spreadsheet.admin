@@ -20,6 +20,7 @@ const { lockdownNetwork } = require('./guard.js');
 const S = require('./sorter.js');
 const AI = require('./ai.js');
 const PdfText = require('../src/pdftext.js');
+const OCR = require('./ocr.js');
 
 const FIELDS = [
   { key: 'docType', label: '書類種別', col: '書類種別' },
@@ -95,18 +96,21 @@ async function evaluate(opts) {
   const targets = files.filter((f) => answers[f]);
   if (missing.length) log(`正解表に無いため採点しないファイル:${missing.length} 件(${missing.slice(0, 5).join('、')}${missing.length > 5 ? ' ほか' : ''})`);
 
-  const texts = {};
+  const texts = {}, bytes = {};
   for (const f of targets) {
-    try { texts[f] = (await PdfText.extractText(pdfjsLib, new Uint8Array(fs.readFileSync(path.join(opts.folder, f))), 5)).text; }
+    bytes[f] = fs.readFileSync(path.join(opts.folder, f));
+    try { texts[f] = (await PdfText.extractText(pdfjsLib, new Uint8Array(bytes[f]), 5)).text; }
     catch (e) { texts[f] = ''; }
   }
+  const ocrSt = cfg.ocr.enabled ? await OCR.checkVisionModel(cfg.ai, cfg.ocr) : { ok: false };
 
   const results = {};
   for (const m of modes) {
-    const ctx = { clients, ai: Object.assign({}, cfg.ai, { mode: 'fallback' }), aiReady: m.ai };
+    const ctx = { clients, ai: Object.assign({}, cfg.ai, { mode: 'fallback' }), aiReady: m.ai, rules: cfg.rules,
+      ocr: cfg.ocr, ocrReady: m.ai && ocrSt.ok };
     const graded = [];
     for (const f of targets) {
-      const r = await S.analyze(texts[f], ctx);
+      const r = await S.analyze(texts[f], ctx, bytes[f]);
       graded.push(Object.assign({ file: f, result: r }, grade(r, answers[f])));
     }
     results[m.name] = { graded, summary: summarize(graded) };

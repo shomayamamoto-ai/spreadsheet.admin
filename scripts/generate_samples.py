@@ -276,11 +276,49 @@ def duplicate():
     monthly_trial_balance("scan_0009.pdf")
 
 
+# ------------------------------------------------------------------
+# 10. スキャンした紙の書類の例(文字情報が無く、画像だけのPDF)
+#     ローカルAI版の「画像の文字起こし」のテストに使う(local/samples に出力)
+# ------------------------------------------------------------------
+def scanned_image():
+    from io import BytesIO
+    from PIL import Image, ImageDraw, ImageFont
+    from reportlab.lib.utils import ImageReader
+    font_path = next(f for f in FONT_CANDIDATES if Path(f).exists())
+    W, H = 1240, 1754  # A4 を 150dpi で読み取った大きさ
+    img = Image.new("RGB", (W, H), (250, 249, 245))
+    d = ImageDraw.Draw(img)
+    big, mid = ImageFont.truetype(font_path, 44), ImageFont.truetype(font_path, 28)
+    d.text((W // 2, 150), "月次試算表(損益計算書)", font=big, fill=(20, 20, 20), anchor="mm")
+    lines = ["顧問先コード:10001", "顧問先名:株式会社さくら建設", "令和7年5月分", "作成日:令和7年6月12日"]
+    for i, t in enumerate(lines):
+        d.text((120, 260 + i * 48), t, font=mid, fill=(30, 30, 30))
+    rows = [("売上高", "11,920,000"), ("売上原価", "8,410,300"), ("売上総利益", "3,509,700"), ("営業利益", "1,402,100")]
+    for i, (k, v) in enumerate(rows):
+        y = 520 + i * 56
+        d.rectangle((120, y, 1120, y + 56), outline=(60, 60, 60), width=2)
+        d.text((140, y + 12), k, font=mid, fill=(30, 30, 30))
+        d.text((1100, y + 12), v, font=mid, fill=(30, 30, 30), anchor="ra")
+    d.text((W - 80, H - 80), "サンプル会計事務所  ※デモ用の架空データです", font=ImageFont.truetype(font_path, 20), fill=(90, 90, 90), anchor="rs")
+    img = img.rotate(0.6, expand=False, fillcolor=(250, 249, 245))  # 少し傾いた、スキャンらしい画像
+    buf = BytesIO()
+    img.save(buf, "JPEG", quality=80)
+    out = Path(__file__).resolve().parent.parent / "local" / "samples"
+    out.mkdir(parents=True, exist_ok=True)
+    c = canvas.Canvas(str(out / "scan_image_0001.pdf"), pagesize=A4)
+    buf.seek(0)
+    c.drawImage(ImageReader(buf), 0, 0, width=A4[0], height=A4[1])
+    c.showPage()
+    c.save()
+    print("出力:", out / "scan_image_0001.pdf")
+
+
 if __name__ == "__main__":
     for fn in [monthly_trial_balance, financial_statements, corporate_tax,
                consumption_tax, withholding, year_end, unknown_memo,
                monthly_variant, duplicate]:
         fn()
+    scanned_image()
     print("出力先:", OUT)
     for p in sorted(OUT.glob("*.pdf")):
         print(" -", p.name)
