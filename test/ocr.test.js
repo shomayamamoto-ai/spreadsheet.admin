@@ -9,7 +9,7 @@ const OCR = require('../local/ocr.js');
 const { run } = require('../local/sorter.js');
 
 const ROOT = path.join(__dirname, '..');
-const SCAN = path.join(ROOT, 'local', 'samples', 'scan_image_0001.pdf');
+const SCAN = path.join(ROOT, 'test', 'fixtures', 'scan_image_0001.pdf');
 const TRANSCRIPT = '月次試算表(損益計算書)\n顧問先コード:10001\n顧問先名:株式会社さくら建設\n令和7年5月分\n作成日:令和7年6月12日\n売上高 11,920,000';
 
 test('PDFからスキャン画像(JPEG)を取り出せる', () => {
@@ -52,7 +52,7 @@ function setup(url, ocr) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ocr-'));
   fs.mkdirSync(path.join(dir, 'in'));
   fs.copyFileSync(SCAN, path.join(dir, 'in', 'scan_image_0001.pdf'));
-  fs.copyFileSync(path.join(ROOT, 'local', '顧問先マスタ.sample.csv'), path.join(dir, 'master.csv'));
+  fs.copyFileSync(path.join(ROOT, 'test', 'fixtures', '顧問先マスタ.csv'), path.join(dir, 'master.csv'));
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ inbox: 'in', archive: 'out', clients: 'master.csv', ai: { url, model: 'text-model' }, ocr }));
   return dir;
 }

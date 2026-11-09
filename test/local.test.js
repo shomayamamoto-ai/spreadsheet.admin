@@ -114,7 +114,7 @@ test('サンプル9件を、ルール+ローカルAIで仕分けし、一覧CSV�
   const inbox = path.join(dir, '受付');
   fs.mkdirSync(inbox);
   for (const f of fs.readdirSync(path.join(ROOT, 'demo', 'samples'))) fs.copyFileSync(path.join(ROOT, 'demo', 'samples', f), path.join(inbox, f));
-  fs.copyFileSync(path.join(ROOT, 'local', '顧問先マスタ.sample.csv'), path.join(dir, 'master.csv'));
+  fs.copyFileSync(path.join(ROOT, 'test', 'fixtures', '顧問先マスタ.csv'), path.join(dir, 'master.csv'));
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ inbox: '受付', archive: '保管', clients: 'master.csv', ai: { mode: 'fallback', url: fake.url, model: 'test-model', timeoutSec: 10 } }));
 
   const lines = [];

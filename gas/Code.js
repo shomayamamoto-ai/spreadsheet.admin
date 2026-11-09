@@ -85,10 +85,6 @@ function setup() {
   if (cl.getLastRow() === 0) {
     cl.getRange(1, 1, 1, 4).setValues([['顧問先コード', '顧問先名(正式名称)', '別名(カンマ区切り)', '決算月(1〜12)']])
       .setFontWeight('bold').setBackground('#e8f0fe');
-    cl.getRange(2, 1, 2, 4).setValues([
-      ['10001', '株式会社さくら建設', 'さくら建設', 3],
-      ['10002', '有限会社みなと商店', 'みなと商店', 12]
-    ]);
     cl.setFrozenRows(1);
   }
 

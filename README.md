@@ -8,7 +8,7 @@
 - 提案サイト(ブラウザで見る提案資料):`site/index.html`
 - 提案資料:[docs/proposal.md](docs/proposal.md)
 - 事務所への導入手順(そのまま渡せる手順書):[docs/導入手順.md](docs/導入手順.md)
-- サンプルPDF(すべて架空データ):[demo/samples/](demo/samples/)
+- デモ用のサンプルPDF(すべて架空データ。本番では使いません):[demo/samples/](demo/samples/)
 
 ## フォルダ構成
 
@@ -21,7 +21,8 @@
 | `local/` | **ローカルAI版**(事務所のパソコンで動く。ルール+パソコン内のAI)。`server.js` と `ui.html` が操作画面、`sorter.js` が仕分けの本体、`settings.js` が事務所ごとの設定と学習、`ocr.js` がスキャンした書類の文字起こし、`evaluate.js` が精度の測定 |
 | `gas/` | Google Apps Script 版(Googleドライブ+スプレッドシートで動く。ルールのみ) |
 | `scripts/generate_samples.py` | サンプルPDFを作るスクリプト |
-| `test/` | 読み取りルールの自動テスト |
+| `test/` | 自動テスト |
+| `test/fixtures/` | 自動テスト専用の架空データ(顧問先マスタ・正解表・スキャン見本)。本番では使いません |
 
 `demo/extractor.js`・`demo/pdftext.js`・`demo/privacy.js`・`gas/Extractor.js` は、`src/` からの自動コピーです。
 ルールを直すときは `src/` を編集し、`npm run build` を実行してください。
@@ -93,9 +94,9 @@ npm install
 ```
 
 3. 設定ファイルと顧問先マスタを用意する
-   - `local/config.sample.json` をコピーして `local/config.json` を作り、
+   - `local/config.template.json` をコピーして `local/config.json` を作り、
      受付フォルダ(`inbox`)・保存先フォルダ(`archive`)・顧問先マスタ(`clients`)・モデル名を書く
-   - 顧問先マスタは `local/顧問先マスタ.sample.csv` と同じ形のCSV
+   - 顧問先マスタは `local/顧問先マスタ.template.csv`(見出しだけの空のひな形)と同じ形のCSV
      (顧問先コード,顧問先名,別名(;区切り),決算月)
 4. **操作画面を起動する(おすすめ)**
    - Windows:`local/起動_Windows.bat` をダブルクリック
@@ -226,7 +227,7 @@ npm test
 ファイルは一切動かしません。外部への通信もしません。
 
 1. 試したいPDFを1つのフォルダに集める(例:50〜100件)
-2. 正解表(CSV)を作る。形は `local/正解表.sample.csv` と同じです
+2. 正解表(CSV)を作る。形は `local/正解表.template.csv`(見出しだけの空のひな形)と同じです
    (ファイル名,書類種別,顧問先コード,対象期間(終了))。空欄の項目は採点しません
 3. 実行する
 

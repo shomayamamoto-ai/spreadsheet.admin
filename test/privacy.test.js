@@ -71,7 +71,7 @@ test('ローカルAI版の通信は、このパソコン自身(localhost)宛て�
   assert.ok(all.length > 0 && all.length === safe.length, `確認できない通信が ${all.length - safe.length} か所あります`);
   assert.ok(/const base = assertLoopback\(cfg\.url\)/.test(code('local/ai.js')));
   // 設定ファイルの見本も localhost 宛て
-  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'local', 'config.sample.json'), 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'local', 'config.template.json'), 'utf8'));
   assert.match(cfg.ai.url, /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/);
 });
 

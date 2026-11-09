@@ -10,14 +10,14 @@ const ROOT = path.join(__dirname, '..');
 
 function setup(answersText) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-'));
-  fs.copyFileSync(path.join(ROOT, 'local', '顧問先マスタ.sample.csv'), path.join(dir, 'master.csv'));
+  fs.copyFileSync(path.join(ROOT, 'test', 'fixtures', '顧問先マスタ.csv'), path.join(dir, 'master.csv'));
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ inbox: '.', archive: '.', clients: 'master.csv', ai: { mode: 'off' } }));
   fs.writeFileSync(path.join(dir, 'answers.csv'), answersText);
   return dir;
 }
 
 test('サンプル9件の精度を測る(ファイルは動かさない)', async () => {
-  const dir = setup(fs.readFileSync(path.join(ROOT, 'local', '正解表.sample.csv'), 'utf8'));
+  const dir = setup(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', '正解表.csv'), 'utf8'));
   const folder = path.join(ROOT, 'demo', 'samples');
   const before = fs.readdirSync(folder).join();
   const lines = [];

@@ -1,8 +1,8 @@
 {
-  "office": { "name": "〇〇会計事務所" },
-  "inbox": "../work/受付",
-  "archive": "../work/書類保管",
-  "clients": "顧問先マスタ.sample.csv",
+  "office": { "name": "" },
+  "inbox": "受付フォルダの場所",
+  "archive": "保存先フォルダの場所",
+  "clients": "顧問先マスタ.csv",
   "ai": {
     "mode": "fallback",
     "url": "http://127.0.0.1:11434",
@@ -20,9 +20,6 @@
     "folder": "{顧問先}/{年度}/{書類種別}",
     "file": "{顧問先}_{期間}_{書類種別}"
   },
-  "docTypes": [
-    { "name": "月次試算表", "titleWords": ["損益推移表"] },
-    { "name": "経営計画書", "titleWords": ["経営計画書"], "periodKind": "fiscal" }
-  ],
+  "docTypes": [],
   "autoRunMinutes": 0
 }

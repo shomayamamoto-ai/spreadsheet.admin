@@ -278,7 +278,7 @@ def duplicate():
 
 # ------------------------------------------------------------------
 # 10. スキャンした紙の書類の例(文字情報が無く、画像だけのPDF)
-#     ローカルAI版の「画像の文字起こし」のテストに使う(local/samples に出力)
+#     ローカルAI版の「画像の文字起こし」のテストに使う(test/fixtures に出力)
 # ------------------------------------------------------------------
 def scanned_image():
     from io import BytesIO
@@ -303,7 +303,7 @@ def scanned_image():
     img = img.rotate(0.6, expand=False, fillcolor=(250, 249, 245))  # 少し傾いた、スキャンらしい画像
     buf = BytesIO()
     img.save(buf, "JPEG", quality=80)
-    out = Path(__file__).resolve().parent.parent / "local" / "samples"
+    out = Path(__file__).resolve().parent.parent / "test" / "fixtures"
     out.mkdir(parents=True, exist_ok=True)
     c = canvas.Canvas(str(out / "scan_image_0001.pdf"), pagesize=A4)
     buf.seek(0)

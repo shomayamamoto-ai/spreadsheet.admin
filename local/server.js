@@ -198,8 +198,10 @@ function createServer(configPath) {
       if (req.method === 'GET' && url.pathname === '/api/naming-preview') {
         // 名前の付け方の見本(画面で入力中の付け方で作る)
         const naming = { folder: url.searchParams.get('folder') || '', file: url.searchParams.get('file') || '' };
-        const sample = { clientCode: '10001', clientName: '株式会社さくら建設', docType: '月次試算表', periodStart: '2025-03-01', periodEnd: '2025-03-31' };
-        const n = X.suggestNames(sample, { fiscalEndMonth: 3 }, { naming });
+        // 見本には、事務所の顧問先マスタの最初の顧問先を使う(未登録なら仮の名前)
+        const first = S.loadClients(cfg().clientsFile)[0] || { code: '0001', name: '顧問先名', fiscalEndMonth: 3 };
+        const sample = { clientCode: first.code, clientName: first.name, docType: '月次試算表', periodStart: '2025-03-01', periodEnd: '2025-03-31' };
+        const n = X.suggestNames(sample, { fiscalEndMonth: first.fiscalEndMonth || 3 }, { naming });
         return send(200, { folder: n.folder.join(' / '), file: n.fileName });
       }
       if (req.method === 'GET' && url.pathname === '/api/pdf') {

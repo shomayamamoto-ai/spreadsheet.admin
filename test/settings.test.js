@@ -47,7 +47,7 @@ function setup() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-'));
   fs.mkdirSync(path.join(dir, '受付'));
   for (const f of ['scan_0001.pdf', 'scan_0007.pdf']) fs.copyFileSync(path.join(ROOT, 'demo', 'samples', f), path.join(dir, '受付', f));
-  fs.copyFileSync(path.join(ROOT, 'local', '顧問先マスタ.sample.csv'), path.join(dir, 'master.csv'));
+  fs.copyFileSync(path.join(ROOT, 'test', 'fixtures', '顧問先マスタ.csv'), path.join(dir, 'master.csv'));
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ inbox: '受付', archive: '保管', clients: 'master.csv', ai: { mode: 'off' } }));
   return dir;
 }

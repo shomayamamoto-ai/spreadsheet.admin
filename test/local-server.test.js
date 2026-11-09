@@ -13,7 +13,7 @@ function setup() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sorter-ui-'));
   fs.mkdirSync(path.join(dir, '受付'));
   for (const f of fs.readdirSync(path.join(ROOT, 'demo', 'samples'))) fs.copyFileSync(path.join(ROOT, 'demo', 'samples', f), path.join(dir, '受付', f));
-  fs.copyFileSync(path.join(ROOT, 'local', '顧問先マスタ.sample.csv'), path.join(dir, 'master.csv'));
+  fs.copyFileSync(path.join(ROOT, 'test', 'fixtures', '顧問先マスタ.csv'), path.join(dir, 'master.csv'));
   // AIは使わない設定(サーバーの機能だけを確かめる)
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ inbox: '受付', archive: '保管', clients: 'master.csv', ai: { mode: 'off' } }));
   return dir;

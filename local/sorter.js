@@ -266,7 +266,7 @@ if (require.main === module) {
   const get = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
   const config = get('--config') || path.join(__dirname, 'config.json');
   if (!fs.existsSync(config)) {
-    console.error(`設定ファイルが見つかりません:${config}\nlocal/config.sample.json をコピーして作ってください。`);
+    console.error(`設定ファイルが見つかりません:${config}\nlocal/config.template.json をコピーして作ってください。`);
     process.exit(1);
   }
   run({ config, apply: args.includes('--apply') }).catch((e) => { console.error('エラー:' + e.message); process.exit(1); });
