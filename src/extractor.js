@@ -181,7 +181,8 @@ var TaxDocExtractor = (function () {
       year = ERA[era] + (eraYear === '元' ? 1 : parseInt(eraYear, 10));
     }
     if (!(month >= 1 && month <= 12)) return null;
-    if (day !== null && !(day >= 1 && day <= 31)) return null;
+    // 2月31日のような、存在しない日付は読まない
+    if (day !== null && !(day >= 1 && day <= lastDayOfMonth(year, month))) return null;
     return { y: year, m: month, d: day };
   }
 
@@ -314,29 +315,43 @@ var TaxDocExtractor = (function () {
   }
 
   // 顧問先マスタ(任意)と照合して、名前の表記ゆれをそろえる
-  function matchMaster(clients, code, name, flat) {
-    if (!clients || !clients.length) return null;
-    var i, c;
+  // 顧問先マスタ(任意)と照合して、名前の表記ゆれをそろえる
+  //  1) 顧問先コードが一致 → その顧問先
+  //  2) 「顧問先名:」などの見出しや「御中」で読めた名前 → その名前だけで照合
+  //     (マスタに無ければ、本文中の別の会社名で代わりに照合しない)
+  //  3) それ以外は本文全体から探し、1社だけ見つかったときに採用。複数なら「紛らわしい」
+  //  戻り値:{ client, ambiguous:[名前…] }
+  function keysOf(c) {
+    return [c.name].concat(c.aliases || []).map(nameKey).filter(function (k) { return k.length >= 2; });
+  }
+  function matchMaster(clients, code, name, flat, strongName) {
+    var none = { client: null, ambiguous: [] };
+    if (!clients || !clients.length) return none;
+    var i;
     if (code) {
       for (i = 0; i < clients.length; i++) {
-        if (String(clients[i].code) === String(code)) return clients[i];
+        if (String(clients[i].code) === String(code)) return { client: clients[i], ambiguous: [] };
       }
     }
+    var pick = function (list) {
+      if (list.length === 1) return { client: list[0], ambiguous: [] };
+      return { client: null, ambiguous: list.map(function (c) { return c.name; }) };
+    };
     var key = name ? nameKey(name) : '';
-    var flatKey = nameKey(flat);
-    for (i = 0; i < clients.length; i++) {
-      c = clients[i];
-      var names = [c.name].concat(c.aliases || []);
-      for (var j = 0; j < names.length; j++) {
-        var nk = nameKey(names[j]);
-        if (!nk) continue;
-        if ((key && (key === nk || key.indexOf(nk) >= 0 || nk.indexOf(key) >= 0)) ||
-            flatKey.indexOf(nk) >= 0) {
-          return c;
-        }
-      }
+    if (key.length >= 2) {
+      var exact = clients.filter(function (c) { return keysOf(c).indexOf(key) >= 0; });
+      if (exact.length) return pick(exact);
+      var partial = clients.filter(function (c) {
+        return keysOf(c).some(function (k) { return key.indexOf(k) >= 0 || k.indexOf(key) >= 0; });
+      });
+      if (partial.length) return pick(partial);
+      if (strongName) return none;
     }
-    return null;
+    var flatKey = nameKey(flat);
+    var inText = clients.filter(function (c) {
+      return keysOf(c).some(function (k) { return flatKey.indexOf(k) >= 0; });
+    });
+    return inText.length ? pick(inText) : none;
   }
 
   // ------------------------------------------------------------
@@ -426,7 +441,7 @@ var TaxDocExtractor = (function () {
 
   function findAmount(flat, labels) {
     for (var i = 0; i < labels.length; i++) {
-      var label = compact(normalize(labels[i]));
+      var label = compact(normalize(labels[i])).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       var re = new RegExp(label + '[^\\d△▲\\-]{0,12}?' + NUM_SRC, 'g');
       var m, fallback = null, best = null;
       while ((m = re.exec(flat)) !== null) {
@@ -470,7 +485,10 @@ var TaxDocExtractor = (function () {
   }
   // フォルダの外に出るような名前(「..」など)にならないよう整える
   function safePart(s) {
-    return safe(s).replace(/^[.\s]+/, '').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    var t = safe(s).replace(/^[.\s]+/, '').replace(/[.\s]+$/, '').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    // Windows で使えない名前(CON・NUL・COM1 など)は、末尾に「_」を付けて避ける
+    if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i.test(t)) t += '_';
+    return t;
   }
 
   function buildNames(r, client, naming) {
@@ -480,15 +498,16 @@ var TaxDocExtractor = (function () {
     var fem = client && client.fiscalEndMonth ? parseInt(client.fiscalEndMonth, 10) : null;
     if (p) {
       var kind = r.periodKind;
+      // 書類種別の「期間の種類」を先に見る(どの経路で作っても同じ名前になるように)
       if (kind === 'date') {
         periodPart = p.end.y + '-' + pad2(p.end.m) + '-' + pad2(p.end.d || 1);
         yearFolder = p.end.y + '年';
-      } else if (p.kind === 'range' && kind !== 'month') {
-        periodPart = fiscalLabel(p.end);
-        yearFolder = fiscalLabel(p.end);
-      } else if (p.kind === 'year' || kind === 'year') {
+      } else if (kind === 'year' || (!kind && p.kind === 'year')) {
         periodPart = p.end.y + '年分';
         yearFolder = p.end.y + '年分';
+      } else if (kind === 'fiscal' || (!kind && p.kind === 'range')) {
+        periodPart = fiscalLabel(p.end);
+        yearFolder = fiscalLabel(p.end);
       } else if (p.kind === 'range' && (p.start.y !== p.end.y || p.start.m !== p.end.m)) {
         // 複数月にまたがる月単位の書類(納期の特例など)
         periodPart = p.start.y + '-' + pad2(p.start.m) + '〜' + pad2(p.end.m);
@@ -540,12 +559,17 @@ var TaxDocExtractor = (function () {
     var nameHit = findClientName(lines);
     var name = nameHit ? nameHit.value : '';
     var nameHow = nameHit ? nameHit.how : '';
-    var master = matchMaster(options.clients, code, name, flat);
+    var strongName = !!nameHit && /ラベル|御中/.test(nameHit.how);
+    var matched = matchMaster(options.clients, code, name, flat, strongName);
+    var master = matched.client;
+    if (matched.ambiguous.length) {
+      addIssue('client_ambiguous', '複数の顧問先の名前が書かれています(' + matched.ambiguous.join('、') + ')');
+    }
     if (master) {
       if (!code) code = String(master.code);
       name = master.name;
       nameHow = '顧問先マスタと照合';
-    } else if (name && options.clients && options.clients.length) {
+    } else if (name && options.clients && options.clients.length && !matched.ambiguous.length) {
       addIssue('client_not_in_master', '「' + name + '」は顧問先マスタに登録がありません');
     }
     if (!name) addIssue('client_missing', '顧問先名が見つかりません');

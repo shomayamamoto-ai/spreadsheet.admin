@@ -20,11 +20,13 @@ function setup() {
 }
 
 // Host ヘッダーを自由に指定するため、http モジュールで直接送る
-function request(port, method, p, { body, token, host } = {}) {
+let COOKIE = '';
+function request(port, method, p, { body, token, host, cookie } = {}) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : '';
     const req = http.request({ hostname: '127.0.0.1', port, path: p, method, headers: Object.assign(
       { Host: host || `127.0.0.1:${port}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      cookie !== undefined ? (cookie ? { Cookie: cookie } : {}) : (COOKIE ? { Cookie: COOKIE } : {}),
       token ? { 'X-App-Token': token } : {}) }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
@@ -47,6 +49,19 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
   const { port, address } = server.address();
   assert.strictEqual(address, '127.0.0.1');
   try {
+    // ログインしていない人は、画面もPDFも設定も見られない(同じパソコンを使う別の人を想定)
+    for (const p of ['/', '/api/status', '/api/review', '/api/settings', '/api/pdf?file=scan_0007.pdf', '/fonts/line-seed-jp/400.css']) {
+      assert.strictEqual((await request(port, 'GET', p, { cookie: '' })).status, 403, p);
+    }
+    assert.strictEqual((await request(port, 'GET', '/', { cookie: 'psa=' + 'a'.repeat(64) })).status, 403, '偽の通行証');
+    // 起動時のコードでログイン(コードは1回だけ有効)
+    const code = server.makeLoginCode();
+    const login = await request(port, 'GET', '/?code=' + code, { cookie: '' });
+    assert.strictEqual(login.status, 303);
+    assert.match(login.headers['set-cookie'][0], /HttpOnly; SameSite=Strict/);
+    COOKIE = login.headers['set-cookie'][0].split(';')[0];
+    assert.strictEqual((await request(port, 'GET', '/?code=' + code, { cookie: '' })).status, 403, '使用済みのコード');
+
     // 画面には合言葉が埋め込まれ、外部の部品を読み込まない
     const page = await request(port, 'GET', '/');
     assert.strictEqual(page.status, 200);

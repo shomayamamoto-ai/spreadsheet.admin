@@ -104,23 +104,50 @@ function validDate(s) {
 }
 
 // AIの答えのうち、確かめられたものだけを返す。rejected には使わなかった理由
+// 根拠の文章に、その書類種別の目印(表題・キーワード)が入っているか
+function evidenceHasTypeWord(evidence, type) {
+  const ev = X.compact(X.normalize(evidence || ''));
+  return (type.titleWords || []).concat(type.keywords || []).some((w) => {
+    const k = X.compact(X.normalize(w));
+    return k.length >= 2 && ev.indexOf(k) >= 0;
+  });
+}
+
+// 顧問先コードが、数字の一部ではなく「ひとまとまり」で書かれているか(「3」が「令和7年3月」に一致しないように)
+//  ・「顧問先コード:3」のように見出しの直後にあれば、短いコードでも認める
+//  ・見出しが無いときは、4桁以上で、前後が数字でないものだけ認める(「令和7年3月」の3と区別するため)
+function hasCodeToken(evidence, code) {
+  const ev = X.compact(X.normalize(evidence || ''));
+  const c = String(code).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp('(コード|番号|CD|No\\.?)[::]?' + c + '(?![0-9])').test(ev)) return true;
+  return String(code).length >= 4 && new RegExp('(^|[^0-9])' + c + '([^0-9]|$)').test(ev);
+}
+
+/**
+ * AIの答えを確かめる
+ *  ok       … 根拠で裏付けられた答え(自動で使ってよい)
+ *  weak     … PDFの中に根拠はあるが、裏付けが弱い答え(入力済みにして、人の確認に回す)
+ *  rejected … 使わなかった答えと理由
+ */
 function verifyAI(ai, text, clients, rules) {
-  const ok = {}, rejected = [];
+  const ok = {}, weak = {}, rejected = [];
   ai = ai || {};
-  const docTypes = X.typesFor(rules).map((d) => d.name);
+  const types = X.typesFor(rules);
 
   if (ai.docType) {
-    if (docTypes.indexOf(ai.docType) < 0) rejected.push('書類種別:候補にない答え');
+    const t = types.find((d) => d.name === ai.docType);
+    if (!t) rejected.push('書類種別:候補にない答え');
     else if (!inText(text, ai.docTypeEvidence)) rejected.push('書類種別:根拠がPDFの中に見つからない');
-    else ok.docType = ai.docType;
+    else if (evidenceHasTypeWord(ai.docTypeEvidence, t)) ok.docType = ai.docType;
+    else weak.docType = ai.docType; // 例:帳票の表題が目印に無い。人の確認で表題を覚えれば、次からはルールで読める
   }
   if (ai.clientCode) {
     const c = clients.find((x) => String(x.code) === String(ai.clientCode));
     const ev = X.nameKey(ai.clientEvidence || '');
-    const mentions = c && [c.name].concat(c.aliases || []).some((n) => X.nameKey(n) && ev.indexOf(X.nameKey(n)) >= 0);
+    const mentions = c && [c.name].concat(c.aliases || []).some((n) => X.nameKey(n).length >= 2 && ev.indexOf(X.nameKey(n)) >= 0);
     if (!c) rejected.push('顧問先:マスタにないコード');
     else if (!inText(text, ai.clientEvidence)) rejected.push('顧問先:根拠がPDFの中に見つからない');
-    else if (!mentions && ev.indexOf(String(c.code)) < 0) rejected.push('顧問先:根拠の文章に、その顧問先の名前もコードも無い');
+    else if (!mentions && !hasCodeToken(ai.clientEvidence, c.code)) rejected.push('顧問先:根拠の文章に、その顧問先の名前もコードも無い');
     else ok.client = c;
   }
   if (ai.periodEnd) {
@@ -128,13 +155,15 @@ function verifyAI(ai, text, clients, rules) {
     if (!validDate(ai.periodEnd) || (start && !validDate(start)) || (start && start > ai.periodEnd)) rejected.push('対象期間:日付の形が正しくない');
     else if (!inText(text, ai.periodEvidence)) rejected.push('対象期間:根拠がPDFの中に見つからない');
     else {
-      // 根拠の文章をルールでも読めるなら、AIの答えと食い違っていないか確かめる
+      // 根拠の文章を、ルールでも同じ日付に読めるときだけ裏付けありとする
       const check = X.extract(ai.periodEvidence);
-      if (check.periodEnd && check.periodEnd !== ai.periodEnd) rejected.push('対象期間:根拠の文章と日付が食い違う');
-      else ok.period = { start: start || ai.periodEnd.slice(0, 8) + '01', end: ai.periodEnd };
+      const p = { start: start || ai.periodEnd.slice(0, 8) + '01', end: ai.periodEnd };
+      if (check.periodEnd && check.periodEnd === ai.periodEnd) ok.period = p;
+      else if (check.periodEnd) rejected.push('対象期間:根拠の文章と日付が食い違う');
+      else weak.period = p; // 根拠の文章から日付を読み取れない
     }
   }
-  return { ok, rejected };
+  return { ok, weak, rejected };
 }
 
 /**
@@ -144,9 +173,10 @@ function verifyAI(ai, text, clients, rules) {
  */
 function merge(rule, ai, text, clients, rules) {
   rules = rules || {};
-  const v = ai ? verifyAI(ai, text, clients, rules) : { ok: {}, rejected: [] };
+  const v = ai ? verifyAI(ai, text, clients, rules) : { ok: {}, weak: {}, rejected: [] };
+  const guessed = []; // 裏付けの弱いAIの推定で埋めた項目
   const issues = [], aiFilled = [];
-  const keep = { low_text: true };
+  const keep = { low_text: true, client_ambiguous: true };
   rule.issueCodes.forEach((code, i) => { if (keep[code]) issues.push(rule.issues[i]); });
 
   // 書類種別
@@ -158,6 +188,8 @@ function merge(rule, ai, text, clients, rules) {
       if (ambiguous && rule.docTypeCandidates.indexOf(v.ok.docType) >= 0) { docType = v.ok.docType; aiFilled.push('書類種別'); }
       else issues.push(`書類種別の判定が違います(ルール:${docType}/AI:${v.ok.docType})`);
     }
+  } else if (v.weak.docType && !docType) {
+    docType = v.weak.docType; guessed.push('書類種別');
   } else if (ambiguous) {
     issues.push(rule.issues[rule.issueCodes.indexOf('type_ambiguous')]);
   }
@@ -178,8 +210,14 @@ function merge(rule, ai, text, clients, rules) {
   if (v.ok.period) {
     if (!periodEnd) { periodStart = v.ok.period.start; periodEnd = v.ok.period.end; aiFilled.push('対象期間'); }
     else if (v.ok.period.end !== periodEnd) issues.push(`対象期間の判定が違います(ルール:${periodEnd}/AI:${v.ok.period.end})`);
+  } else if (v.weak.period && !periodEnd) {
+    periodStart = v.weak.period.start; periodEnd = v.weak.period.end; guessed.push('対象期間');
   }
   if (!periodEnd) issues.push('対象期間が見つかりません');
+  if (guessed.length) {
+    issues.push(`ローカルAIの推定を入力しました(${guessed.join('・')})。根拠が弱いため、確認して確定してください`);
+    guessed.forEach((g) => aiFilled.push(g + '(推定)'));
+  }
 
   const client = clients.find((c) => String(c.code) === String(clientCode)) || null;
   const names = X.suggestNames({ clientCode, clientName, docType, periodStart, periodEnd }, client, rules);

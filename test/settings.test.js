@@ -12,14 +12,15 @@ const { createServer } = require('../local/server.js');
 
 const ROOT = path.join(__dirname, '..');
 
+let COOKIE = '';
 function request(port, method, p, { body, token } = {}) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : '';
     const req = http.request({ hostname: '127.0.0.1', port, path: p, method, headers: Object.assign(
-      { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, token ? { 'X-App-Token': token } : {}) }, (res) => {
+      { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, token ? { 'X-App-Token': token } : {}, COOKIE ? { Cookie: COOKIE } : {}) }, (res) => {
       let t = '';
       res.on('data', (c) => { t += c; });
-      res.on('end', () => { let json = null; try { json = JSON.parse(t); } catch (e) { /* html */ } resolve({ status: res.statusCode, json, text: t }); });
+      res.on('end', () => { let json = null; try { json = JSON.parse(t); } catch (e) { /* html */ } resolve({ status: res.statusCode, headers: res.headers, json, text: t }); });
     });
     req.on('error', reject);
     req.end(data);
@@ -81,6 +82,7 @@ test('事務所の設定で仕分け、確定した書類の表題・顧問先�
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
   try {
+    COOKIE = (await request(port, 'GET', '/?code=' + server.makeLoginCode())).headers['set-cookie'][0].split(';')[0];
     const token = /var TOKEN = '([0-9a-f]{48})'/.exec((await request(port, 'GET', '/')).text)[1];
 
     // 名前の付け方の見本
@@ -127,4 +129,31 @@ test('帳票の表題の取り出し', () => {
   assert.strictEqual(ST.titleOf('月次試算表(損益計算書)\n顧問先...'), '月次試算表');
   assert.strictEqual(ST.titleOf('令和6年分 給与所得の源泉徴収票(控)'), '給与所得の源泉徴収票');
   assert.strictEqual(ST.titleOf(''), '');
+});
+
+test('点検で見つかった設定の問題の再発防止', () => {
+  const dir = setup();
+  const cfg = path.join(dir, 'config.json');
+  // 受付フォルダを保存先フォルダの中に置く(またはその逆)ことはできない
+  assert.throws(() => ST.saveSettings(cfg, Object.assign(base(dir), { inbox: path.join(dir, '保管', '_要確認') })), /別のフォルダ/);
+  assert.throws(() => ST.saveSettings(cfg, Object.assign(base(dir), { archive: path.join(dir, '受付', '保管') })), /別のフォルダ/);
+  // ページ番号のような、かな・漢字の無い行は表題として覚えない
+  assert.strictEqual(ST.titleOf('1/2\n請求書'), '');
+  assert.strictEqual(ST.titleOf('2025-03\n請求書'), '');
+  // 短すぎる別名は覚えない(ほかの書類の文中に出てきて取り違えるため)
+  assert.strictEqual(ST.learnAlias(cfg, '10002', '商'), false);
+});
+
+test('顧問先の一覧を送らずに設定を保存しても、顧問先マスタは消えない', async () => {
+  const dir = setup();
+  const server = createServer(path.join(dir, 'config.json'));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+  try {
+    COOKIE = (await request(port, 'GET', '/?code=' + server.makeLoginCode())).headers['set-cookie'][0].split(';')[0];
+    const token = /var TOKEN = '([0-9a-f]{48})'/.exec((await request(port, 'GET', '/')).text)[1];
+    const r = await request(port, 'POST', '/api/settings', { token, body: { settings: base(dir) } });
+    assert.strictEqual(r.status, 200, r.text);
+    assert.strictEqual(S.loadClients(path.join(dir, 'master.csv')).length, 4);
+  } finally { server.close(); }
 });

@@ -150,3 +150,43 @@ test('フォルダ名・ファイル名の付け方を事務所ごとに変え�
   assert.ok(evil.folder.every((p) => p && !p.startsWith('.')), JSON.stringify(evil));
   assert.ok(!evil.fileName.startsWith('.'));
 });
+
+// ---- 点検で見つかった問題の再発防止 ----
+const C2 = [{ code: '0001', name: '株式会社山田商事' }, { code: '0002', name: '株式会社佐藤工業' }];
+
+test('見出しの顧問先がマスタに無いとき、本文中の別の会社名で代わりに照合しない', () => {
+  const r = X.extract('月次試算表\n顧問先名:株式会社佐藤建設\n取引先 株式会社山田商事\n令和7年3月分', { clients: C2 });
+  assert.strictEqual(r.status, '要確認');
+  assert.notStrictEqual(r.clientCode, '0001');
+});
+
+test('本文に複数の顧問先の名前があるときは、紛らわしいので要確認', () => {
+  const r = X.extract('月次試算表\n株式会社山田商事と株式会社佐藤工業の取引\n令和7年3月分', { clients: C2 });
+  assert.strictEqual(r.status, '要確認');
+  assert.match(r.issues.join(), /複数の顧問先/);
+});
+
+test('存在しない日付(2月31日など)は読まない', () => {
+  assert.strictEqual(X.extract('月次試算表\n顧問先名:株式会社佐藤工業\n令和7年2月31日現在', { clients: C2 }).periodEnd, '');
+  assert.strictEqual(X.extract('月次試算表\n顧問先名:株式会社佐藤工業\n令和6年2月29日現在', { clients: C2 }).periodEnd, '2024-02-29'); // うるう年はOK
+});
+
+test('同じ書類は、読み取りでも確定でも同じフォルダ名になる', () => {
+  const read = X.extract('源泉徴収票\n顧問先名:株式会社佐藤工業\n自令和6年1月1日至令和6年12月31日', { clients: C2 });
+  const fix = X.suggestNames({ clientCode: '0002', clientName: '株式会社佐藤工業', docType: '源泉徴収票・年末調整', periodStart: '2024-01-01', periodEnd: '2024-12-31' }, null);
+  assert.strictEqual(read.suggestedFolder[1], '2024年分');
+  assert.strictEqual(fix.folder[1], '2024年分');
+  // 決算書は終了日だけでも「〇年〇月期」
+  assert.strictEqual(X.suggestNames({ clientCode: '0002', clientName: 'A', docType: '決算書', periodEnd: '2025-03-31' }, null).fileName, '0002_A_2025年3月期_決算書.pdf');
+});
+
+test('Windowsで使えない名前は避ける', () => {
+  const n = X.suggestNames({ clientCode: '', clientName: 'CON', docType: '決算書', periodEnd: '2025-03-31' }, null, { naming: { folder: '{顧問先名}', file: '{顧問先名}.' } });
+  assert.deepStrictEqual(n.folder, ['CON_']);
+  assert.strictEqual(n.fileName, 'CON_.pdf');
+});
+
+test('金額の項目名に記号があってもエラーにならない', () => {
+  const r = X.extract('月次試算表\n顧問先名:株式会社佐藤工業\n令和7年3月分\n売上高(税込) 1,000', { clients: C2, docTypes: [{ name: '月次試算表', amountLabels: ['売上高(税込)'] }] });
+  assert.strictEqual(r.amount, 1000);
+});

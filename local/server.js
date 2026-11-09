@@ -30,8 +30,27 @@ const DUP_FOLDER = '_重複(削除候補)';
 
 function createServer(configPath) {
   lockdownNetwork();
-  const token = crypto.randomBytes(24).toString('hex');
+  const token = crypto.randomBytes(24).toString('hex');      // 画面に埋め込む合言葉(操作用)
+  const session = crypto.randomBytes(32).toString('hex');    // ブラウザに渡す通行証(Cookie)
+  const loginCodes = new Map();                               // 1回だけ使えるログイン用のコード → 有効期限
   const ui = fs.readFileSync(path.join(__dirname, 'ui.html'), 'utf8').replace('__TOKEN__', token);
+
+  // 起動したブラウザ用の、1回だけ使えるログインのコードを作る(5分間有効)
+  function makeLoginCode() {
+    const code = crypto.randomBytes(24).toString('hex');
+    loginCodes.set(code, Date.now() + 5 * 60 * 1000);
+    return code;
+  }
+  function useLoginCode(code) {
+    const exp = code && loginCodes.get(code);
+    if (!exp) return false;
+    loginCodes.delete(code); // 1回使ったら無効
+    return exp > Date.now();
+  }
+  function hasSession(req) {
+    const m = /(?:^|;\s*)psa=([0-9a-f]{64})/.exec(String(req.headers.cookie || ''));
+    return !!m && sameToken(m[1], session);
+  }
   const state = { running: false, last: null, timer: null, nextRunAt: null };
 
   const cfg = () => S.loadConfig(configPath);
@@ -85,6 +104,7 @@ function createServer(configPath) {
   // ---------- 人が確定した内容で、要確認の書類を仕分ける ----------
   async function confirm(body) {
     const c = cfg();
+    if (state.running) throw new UserError('ただいま仕分けを実行中です。終わってから操作してください');
     const src = safeReviewPath(body.file);
     if (!src) throw new UserError('対象のPDFが「_要確認」フォルダに見つかりません');
     const clients = S.loadClients(c.clientsFile);
@@ -118,6 +138,7 @@ function createServer(configPath) {
 
   function exclude(body) {
     const c = cfg();
+    if (state.running) throw new UserError('ただいま仕分けを実行中です。終わってから操作してください');
     const src = safeReviewPath(body.file);
     if (!src) throw new UserError('対象のPDFが「_要確認」フォルダに見つかりません');
     const destDir = path.join(c.archive, DUP_FOLDER);
@@ -191,6 +212,20 @@ function createServer(configPath) {
       if (!isLoopbackHost(host)) return send(403, { error: '許可されていないアドレスです' });
       const url = new URL(req.url, 'http://127.0.0.1');
 
+      // ---- ログイン:起動時に開いたブラウザだけが使えるようにする ----
+      // (同じパソコンを使う別の人が、ブラウザでこの画面を開いても操作できない)
+      if (req.method === 'GET' && url.pathname === '/' && url.searchParams.has('code')) {
+        if (!useLoginCode(url.searchParams.get('code'))) return send(403, DENIED_PAGE, 'text/html; charset=utf-8');
+        res.writeHead(303, {
+          'Set-Cookie': `psa=${session}; HttpOnly; SameSite=Strict; Path=/`,
+          Location: '/', 'Cache-Control': 'no-store'
+        });
+        return res.end();
+      }
+      if (!hasSession(req)) {
+        return url.pathname === '/' ? send(403, DENIED_PAGE, 'text/html; charset=utf-8') : send(403, { error: 'この画面を開き直してください(起動したときの黒い画面に、開き方が表示されています)' });
+      }
+
       if (req.method === 'GET' && url.pathname === '/') return send(200, ui, 'text/html; charset=utf-8');
       // 字体(このパソコンにインストールした LINE Seed JP / IBM Plex Mono)を配る
       const fm = /^\/fonts\/(line-seed-jp|ibm-plex-mono)\/((?:\d{3}\.css)|(?:files\/[a-z0-9-]+\.woff2?))$/.exec(url.pathname);
@@ -228,9 +263,10 @@ function createServer(configPath) {
         if (url.pathname === '/api/confirm') return send(200, await confirm(body));
         if (url.pathname === '/api/settings') {
           const r = ST.saveSettings(configPath, body.settings || {});
-          const cr = ST.saveClients(configPath, body.clients || []);
-          if (body.settings && body.settings.autoRunMinutes !== undefined) setAuto(body.settings.autoRunMinutes);
-          return send(200, { ok: true, message: `設定を保存しました(顧問先 ${cr.count} 社)`, notes: r.notes });
+          // 顧問先の一覧が送られてきたときだけ、顧問先マスタを書き換える(送られないときに空にしない)
+          const cr = Array.isArray(body.clients) ? ST.saveClients(configPath, body.clients) : null;
+          setAuto(cfg().autoRunMinutes); // 保存した(確認済みの)値で自動実行を設定する
+          return send(200, { ok: true, message: '設定を保存しました' + (cr ? `(顧問先 ${cr.count} 社)` : ''), notes: r.notes });
         }
         if (url.pathname === '/api/exclude') return send(200, exclude(body));
         if (url.pathname === '/api/auto') return send(200, setAuto(body.minutes));
@@ -241,12 +277,19 @@ function createServer(configPath) {
       return send(known ? 400 : 500, { error: known ? e.message : '処理中にエラーが起きました:' + e.message });
     }
   });
+  server.makeLoginCode = makeLoginCode;
   server.on('close', () => clearInterval(state.timer));
   try { if (cfg().autoRunMinutes) setAuto(cfg().autoRunMinutes); } catch (e) { /* 設定が読めないときは自動実行しない */ }
   return server;
 }
 
 class UserError extends Error {}
+
+const DENIED_PAGE = '<!doctype html><meta charset="utf-8"><title>PDF仕分けアシスタント</title>' +
+  '<body style="font-family:sans-serif;max-width:40em;margin:3em auto;padding:0 16px;line-height:1.8">' +
+  '<h1 style="font-size:20px">この画面は開けません</h1>' +
+  '<p>安全のため、この画面は起動したときに自動で開いたブラウザでしか使えません。</p>' +
+  '<p>起動したときの黒い画面で <b>Enter キー</b>を押すと、新しい開き方(アドレス)が表示され、ブラウザが開きます。</p></body>';
 
 // 合言葉の比較(比べる時間から中身を推測されないよう、一定時間で比較する)
 function sameToken(given, token) {
@@ -287,9 +330,18 @@ if (require.main === module) {
   if (ST.ensureConfig(config).created) console.log(`初回の起動です。設定ファイルを作りました:${config}`);
   const server = createServer(config);
   server.listen(port, '127.0.0.1', () => {
-    const url = `http://127.0.0.1:${port}/`;
-    console.log(`PDF仕分けアシスタントを起動しました:${url}`);
-    console.log('この画面(黒い画面)を閉じると終了します。');
-    if (!args.includes('--no-open')) openBrowser(url);
+    // 1回だけ使えるログイン用のアドレスで、ブラウザを開く
+    const open = () => {
+      const url = `http://127.0.0.1:${port}/?code=${server.makeLoginCode()}`;
+      console.log(`\n画面を開くアドレス(5分間・1回だけ有効):\n${url}`);
+      if (!args.includes('--no-open')) openBrowser(url);
+    };
+    console.log('PDF仕分けアシスタントを起動しました。');
+    console.log('この画面(黒い画面)を閉じると終了します。ブラウザを閉じてしまったときは、Enter キーを押すと開き直せます。');
+    open();
+    if (process.stdin.isTTY) {
+      process.stdin.setEncoding('utf8');
+      process.stdin.on('data', open);
+    }
   });
 }

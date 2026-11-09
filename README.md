@@ -254,6 +254,9 @@ AIを使う効果をそのまま比べられます。明細は正解表と同じ
 | ルールで読み取り、迷った書類だけパソコン内のAIが補う | `src/extractor.js`、`local/ai.js` |
 | ローカルAI版の通信先を「このパソコン自身」に限定(外部を指定するとエラー、プログラム全体の通信も見張る) | `local/guard.js` |
 | 操作画面は 127.0.0.1 だけで待ち受け、localhost 以外のアドレス・合言葉の無い操作・要確認フォルダ外のファイル表示を拒否 | `local/server.js` |
+| 起動時に開いたブラウザだけが使える(1回だけ有効なログイン用アドレス+ブラウザ内だけの通行証)。同じパソコンを使う別の人は、画面・PDF・設定を見られない | `local/server.js` |
+| 通信の見張りは3重(fetch のリダイレクト禁止、http の宛先確認、いちばん下の TCP 接続の宛先確認) | `local/guard.js` |
+| 一覧(CSV)に書く文字が、Excel で数式として動かないようにする | `local/sorter.js` |
 | AIの答えを、根拠の文章・顧問先マスタ・候補一覧と照合し、確かめられないものは使わない | `local/ai.js` の `verifyAI` |
 | Google版:フォルダやPDFが公開設定なら処理しない/個人のGmailアカウントなら警告 | `gas/Code.js` |
 | Apps Script に外部通信の権限(`script.external_request`)を付けない | `gas/appsscript.json` の `oauthScopes` |

@@ -44,9 +44,16 @@ function parseCsv(text) {
   if (cell || row.length) { row.push(cell); rows.push(row); }
   return rows.filter((r) => r.some((c) => c.trim() !== ''));
 }
+// Excel で開いたときに、書類から読んだ文字が「数式」として動かないようにする
+// (「=」「+」「-」「@」で始まる文字の前に「'」を付ける。数値はそのまま)
+function neutralize(v) {
+  if (typeof v !== 'string') return v;
+  return /^[=+\-@\t\r]/.test(v) && !/^-?\d+(\.\d+)?$/.test(v) ? "'" + v : v;
+}
+
 function toCsvLine(values) {
   return values.map((v) => {
-    const s = v == null ? '' : String(v);
+    const s = v == null ? '' : String(neutralize(v));
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(',');
 }
@@ -239,20 +246,29 @@ async function run(opts) {
     if (r.status === 'OK') {
       destDir = path.join(archive, ...r.suggestedFolder);
       dest = uniquePath(destDir, r.suggestedFileName);
-      known[key] = `今回の処理で先に仕分けた ${f}`;
     } else {
       destDir = path.join(archive, REVIEW);
       dest = uniquePath(destDir, f);
     }
-    if (opts.apply) moveFile(src, dest);
+    if (opts.apply) {
+      try {
+        moveFile(src, dest);
+      } catch (e) {
+        // 移動できなかった(PDFを開いたままなど)。ファイルは受付フォルダに残し、エラーとして記録して次へ進む
+        r.status = 'エラー';
+        r.issues = (r.issues || []).concat(`ファイルを移動できませんでした(PDFを開いたままの可能性があります):${e.code || e.message}`);
+        dest = src; destDir = inbox;
+      }
+    }
+    if (r.status === 'OK' && key) known[key] = `今回の処理で先に仕分けた ${f}`;
     const row = [nowText(), r.status, r.method, r.docType || '', r.clientCode || '', r.clientName || '',
       r.periodStart || '', r.periodEnd || '', r.createdDate || '', r.amountLabel || '', r.amount == null ? '' : r.amount,
       path.basename(dest), path.relative(archive, destDir) || '.', f, (r.aiFilled || []).join('・'), (r.issues || []).join(' / ')];
     rows.push(row);
+    if (opts.apply) appendLog(archive, [row]); // 1件ごとに記録(途中で止まっても、動かした分の記録は残る)
     log(`${opts.apply ? '移動' : '予定'}:${f} → ${path.relative(archive, dest)}  [${r.status}${r.aiFilled && r.aiFilled.length ? '・AIで補った項目:' + r.aiFilled.join('、') : ''}]`);
   }
 
-  if (opts.apply && rows.length) appendLog(archive, rows);
   const count = (s) => rows.filter((r) => r[1] === s).length;
   log(`\n合計 ${rows.length} 件(OK ${count('OK')} / 要確認 ${count('要確認')} / 重複の疑い ${count('重複の疑い')} / エラー ${count('エラー')})`);
   if (!opts.apply && rows.length) log('※ 試し実行です。ファイルは動かしていません。本番は --apply を付けて実行してください。');

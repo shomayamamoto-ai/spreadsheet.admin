@@ -79,6 +79,15 @@ function getSettings(configPath) {
 
 class SettingsError extends Error {}
 
+// a が b と同じフォルダか、b の中にあるか(Windows・Mac は大文字と小文字を区別しない)
+function isSameOrInside(a, b) {
+  const real = (p) => { try { return fs.realpathSync(p); } catch (e) { return path.resolve(p); } };
+  let x = real(a), y = real(b);
+  if (process.platform === 'win32' || process.platform === 'darwin') { x = x.toLowerCase(); y = y.toLowerCase(); }
+  const rel = path.relative(y, x);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
 const clean = (s, max) => String(s == null ? '' : s).replace(/[\r\n\t]/g, ' ').trim().slice(0, max || 100);
 const words = (v) => (Array.isArray(v) ? v : String(v || '').split(/[,、;]/)).map((w) => clean(w, 40)).filter(Boolean);
 
@@ -96,7 +105,11 @@ function saveSettings(configPath, input) {
     if (!fs.existsSync(abs)) { fs.mkdirSync(abs, { recursive: true }); notes.push(`フォルダを作りました:${abs}`); }
     raw[key] = v;
   }
-  if (path.resolve(baseDir, raw.inbox) === path.resolve(baseDir, raw.archive)) throw new SettingsError('受付フォルダと保存先フォルダは、別のフォルダにしてください');
+  // 片方がもう片方の中にあると、ファイルが何度も移動され続けるため認めない
+  if (isSameOrInside(path.resolve(baseDir, raw.inbox), path.resolve(baseDir, raw.archive)) ||
+      isSameOrInside(path.resolve(baseDir, raw.archive), path.resolve(baseDir, raw.inbox))) {
+    throw new SettingsError('受付フォルダと保存先フォルダは、別のフォルダにしてください(片方をもう片方の中に置くこともできません)');
+  }
 
   // 名前の付け方
   const naming = { folder: clean(input.naming && input.naming.folder, 200), file: clean(input.naming && input.naming.file, 200) };
@@ -172,7 +185,8 @@ function saveClients(configPath, list) {
 function titleOf(text) {
   const line = String(text || '').split('\n').map((l) => X.normalize(l).replace(/\s+/g, '')).find((l) => l.length >= 2) || '';
   const t = line.replace(/[((][^))]*[))]/g, '').replace(/^(令和|平成)\d+年(分)?/, '').replace(/[^一-龥々ぁ-んァ-ヶーA-Za-z0-9・]/g, '');
-  return t.length >= 2 && t.length <= 20 ? t : '';
+  // 数字だけ(例:ページ番号「1/2」)など、かな・漢字を含まない行は表題として覚えない
+  return t.length >= 2 && t.length <= 20 && /[一-龥々ぁ-んァ-ヶ]/.test(t) ? t : '';
 }
 
 function learnTitle(configPath, docType, title) {
@@ -193,10 +207,12 @@ function learnAlias(configPath, code, alias) {
   const clients = S.loadClients(c.clientsFile);
   const target = clients.find((x) => String(x.code) === String(code));
   const a = clean(alias, 60);
+  // 短すぎる別名は、ほかの書類の文中にも出てきて取り違えのもとになるため覚えない
+  if (X.nameKey(a).length < 2) return false;
   if (!target || !a || a === target.name || target.aliases.indexOf(a) >= 0) return false;
   target.aliases.push(a);
   saveClients(configPath, clients);
   return true;
 }
 
-module.exports = { ensureConfig, getSettings, saveSettings, saveClients, titleOf, learnTitle, learnAlias, SettingsError, PERIOD_KINDS };
+module.exports = { isSameOrInside, ensureConfig, getSettings, saveSettings, saveClients, titleOf, learnTitle, learnAlias, SettingsError, PERIOD_KINDS };
