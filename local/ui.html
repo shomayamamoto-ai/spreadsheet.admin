@@ -166,6 +166,7 @@ footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
     if (!b) return '―';
     var kind = (info.docTypeKinds || {})[docType];
     if (kind === 'year') return b.slice(0, 4) + '年分';
+    if (kind === 'date') return b.slice(0, 4) + '/' + b.slice(5, 7) + '/' + b.slice(8, 10);
     if (a && a.slice(0, 7) === b.slice(0, 7)) return b.slice(0, 4) + '年' + (+b.slice(5, 7)) + '月分';
     if (kind === 'fiscal') return b.slice(0, 4) + '年' + (+b.slice(5, 7)) + '月期';
     return (a || '') + '〜' + b;

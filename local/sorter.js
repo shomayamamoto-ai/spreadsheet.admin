@@ -96,6 +96,15 @@ function moveFile(from, to) {
   }
 }
 
+// PDF部品を読み込む。読み込み時に出る英語の技術的な警告(動作には影響しない)は表示しない
+function loadPdfjs() {
+  const quiet = (orig) => (...a) => { if (!/^Warning: (Cannot polyfill|fetchStandardFontData)/.test(String(a[0]))) orig(...a); };
+  const log = console.log, warn = console.warn;
+  console.log = quiet(log); console.warn = quiet(warn);
+  try { return require('pdfjs-dist/legacy/build/pdf.js'); }
+  finally { console.log = log; console.warn = warn; }
+}
+
 // 一覧(書類一覧.csv)に行を追記する
 // Excel・Googleスプレッドシートで文字化けしないよう、新規作成時は BOM を付ける
 function appendLog(archive, rows) {
@@ -155,11 +164,7 @@ async function run(opts) {
     log('ローカルAI:使わない設定です(ルールだけで判定します)');
   }
 
-  // PDF部品が読み込み時に出す、英語の技術的な警告(動作には影響しない)を表示しない
-  const warn = console.warn;
-  console.warn = (...a) => { if (!/Cannot polyfill|fetchStandardFontData/.test(String(a[0]))) warn(...a); };
-  const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
-  console.warn = warn;
+  const pdfjsLib = loadPdfjs();
   const logFile = path.join(archive, LOG_NAME);
   const known = loadKnownKeys(logFile);
   const files = fs.readdirSync(inbox).filter((f) => /\.pdf$/i.test(f)).sort();
@@ -201,7 +206,7 @@ async function run(opts) {
   return { rows, headers: HEADERS };
 }
 
-module.exports = { run, analyze, parseCsv, toCsvLine, loadClients, loadConfig, loadKnownKeys, appendLog, moveFile, uniquePath, nowText, HEADERS, LOG_NAME, REVIEW };
+module.exports = { run, analyze, loadPdfjs, parseCsv, toCsvLine, loadClients, loadConfig, loadKnownKeys, appendLog, moveFile, uniquePath, nowText, HEADERS, LOG_NAME, REVIEW };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

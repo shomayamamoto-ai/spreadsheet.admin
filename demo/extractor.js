@@ -20,7 +20,7 @@ var TaxDocExtractor = (function () {
   //  titleWords   : 表題(1〜2行目)に含まれていたら大きく加点する言葉
   //  keywords     : 本文に含まれていたら加点する言葉
   //  amountLabels : 一覧に載せたい金額の項目名(上から優先)
-  //  periodKind   : month=月単位 / fiscal=事業年度 / year=暦年
+  //  periodKind   : month=月単位 / fiscal=事業年度 / year=暦年 / date=日付(提出日・開催日など)
   // ------------------------------------------------------------
   var DOC_TYPES = [
     {
@@ -78,6 +78,46 @@ var TaxDocExtractor = (function () {
       keywords: ['総勘定元帳', '仕訳帳', '補助元帳'],
       amountLabels: [],
       periodKind: 'fiscal'
+    },
+    {
+      id: 'legal_summary',
+      name: '法定調書合計表',
+      titleWords: ['法定調書合計表'],
+      keywords: ['給与所得の源泉徴収票等の法定調書合計表', '法定調書合計表', '支払調書'],
+      amountLabels: [],
+      periodKind: 'year'
+    },
+    {
+      id: 'salary_report',
+      name: '給与支払報告書',
+      titleWords: ['給与支払報告書'],
+      keywords: ['給与支払報告書', '総括表', '特別徴収'],
+      amountLabels: [],
+      periodKind: 'year'
+    },
+    {
+      id: 'depreciable_assets',
+      name: '償却資産申告書',
+      titleWords: ['償却資産'],
+      keywords: ['償却資産申告書', '種類別明細書', '賦課期日'],
+      amountLabels: [],
+      periodKind: 'year'
+    },
+    {
+      id: 'notification',
+      name: '届出書・申請書',
+      titleWords: ['届出書', '申請書', '異動届'],
+      keywords: ['届出書', '申請書', '青色申告', '異動届出', '承認申請'],
+      amountLabels: [],
+      periodKind: 'date'
+    },
+    {
+      id: 'minutes',
+      name: '議事録',
+      titleWords: ['議事録'],
+      keywords: ['株主総会議事録', '取締役会議事録', '社員総会議事録', '議事録'],
+      amountLabels: [],
+      periodKind: 'date'
     },
     {
       id: 'invoice',
@@ -284,8 +324,31 @@ var TaxDocExtractor = (function () {
         return { start: s, end: e, kind: 'range' };
       }
     }
+    // 「令和7年3月期」(3月で終わる事業年度)
+    var YM = '(?:(令和|平成|R|H)(元|\\d{1,2})|(20\\d{2}))年(\\d{1,2})月';
+    m = flat.match(new RegExp(YM + '期'));
+    if (m) {
+      var fe = toDate([null, m[1], m[2], m[3], m[4], null], 1);
+      if (fe) {
+        var sm = fe.m === 12 ? 1 : fe.m + 1;
+        return {
+          start: { y: fe.m === 12 ? fe.y : fe.y - 1, m: sm, d: 1 },
+          end: { y: fe.y, m: fe.m, d: lastDayOfMonth(fe.y, fe.m) },
+          kind: 'range'
+        };
+      }
+    }
+    // 「令和7年1月から6月分」「2025年7月~12月分」(源泉所得税の納期の特例など)
+    m = flat.match(new RegExp(YM + '(?:分)?(?:から|~|〜|～|-)(\\d{1,2})月分'));
+    if (m) {
+      var ms = toDate([null, m[1], m[2], m[3], m[4], null], 1);
+      var me = parseInt(m[5], 10);
+      if (ms && me >= ms.m && me <= 12) {
+        return { start: { y: ms.y, m: ms.m, d: 1 }, end: { y: ms.y, m: me, d: lastDayOfMonth(ms.y, me) }, kind: 'range' };
+      }
+    }
     // 「令和7年3月分」「2025年3月度」
-    m = flat.match(new RegExp('(?:(令和|平成|R|H)(元|\\d{1,2})|(20\\d{2}))年(\\d{1,2})月(?:分|度)'));
+    m = flat.match(new RegExp(YM + '(?:分|度)'));
     if (m) {
       var md = toDate([null, m[1], m[2], m[3], m[4], null], 1);
       if (md) {
@@ -302,11 +365,17 @@ var TaxDocExtractor = (function () {
       var y = m[3] ? parseInt(m[3], 10) : ERA[m[1]] + (m[2] === '元' ? 1 : parseInt(m[2], 10));
       return { start: { y: y, m: 1, d: 1 }, end: { y: y, m: 12, d: 31 }, kind: 'year' };
     }
+    // 「R7.3.31現在」「令和7年1月1日時点」(ある日の時点の書類)
+    m = flat.match(new RegExp(d + '(?:現在|時点)'));
+    if (m) {
+      var pt = toDate(m, 1);
+      if (pt && pt.d) return { start: { y: pt.y, m: pt.m, d: 1 }, end: pt, kind: 'point' };
+    }
     return null;
   }
 
   function findCreatedDate(flat) {
-    var m = flat.match(new RegExp('(?:作成日|発行日|出力日|印刷日|請求日|提出日|作成年月日)[::]?' + DATE_RE_SRC));
+    var m = flat.match(new RegExp('(?:作成日|発行日|出力日|印刷日|請求日|提出日|作成年月日|開催日時|開催日|届出日|申請日)[::]?' + DATE_RE_SRC));
     return m ? toDate(m, 1) : null;
   }
 
@@ -367,12 +436,19 @@ var TaxDocExtractor = (function () {
     var fem = client && client.fiscalEndMonth ? parseInt(client.fiscalEndMonth, 10) : null;
     if (p) {
       var kind = r.periodKind;
-      if (p.kind === 'range' && kind !== 'month') {
+      if (kind === 'date') {
+        periodPart = p.end.y + '-' + pad2(p.end.m) + '-' + pad2(p.end.d || 1);
+        yearFolder = p.end.y + '年';
+      } else if (p.kind === 'range' && kind !== 'month') {
         periodPart = fiscalLabel(p.end);
         yearFolder = fiscalLabel(p.end);
       } else if (p.kind === 'year' || kind === 'year') {
         periodPart = p.end.y + '年分';
         yearFolder = p.end.y + '年分';
+      } else if (p.kind === 'range' && (p.start.y !== p.end.y || p.start.m !== p.end.m)) {
+        // 複数月にまたがる月単位の書類(納期の特例など)
+        periodPart = p.start.y + '-' + pad2(p.start.m) + '〜' + pad2(p.end.m);
+        yearFolder = fiscalYearOfMonth(p.end.y, p.end.m, fem);
       } else {
         periodPart = p.end.y + '-' + pad2(p.end.m);
         yearFolder = fiscalYearOfMonth(p.end.y, p.end.m, fem);
@@ -426,8 +502,12 @@ var TaxDocExtractor = (function () {
 
     // 期間・日付
     var period = findPeriod(flat);
-    if (!period) addIssue('period_missing', '対象期間が見つかりません');
     var created = findCreatedDate(flat);
+    // 届出書・議事録など「日付の書類」は、提出日・開催日を期間として使う
+    if (docType && docType.periodKind === 'date' && created && created.d) {
+      period = { start: created, end: created, kind: 'point' };
+    }
+    if (!period) addIssue('period_missing', '対象期間が見つかりません');
     var term = findTerm(flat);
 
     // 金額

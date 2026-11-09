@@ -175,7 +175,7 @@ function createServer(configPath) {
 
       if (req.method === 'POST') {
         // 画面に埋め込んだ合言葉が無い操作は受け付けない(CSRF対策)
-        if (req.headers['x-app-token'] !== token) return send(403, { error: '画面を開き直してから操作してください' });
+        if (!sameToken(req.headers['x-app-token'], token)) return send(403, { error: '画面を開き直してから操作してください' });
         const body = await readJson(req);
         if (url.pathname === '/api/run') return send(200, await runSort(!!body.apply));
         if (url.pathname === '/api/confirm') return send(200, confirm(body));
@@ -192,6 +192,13 @@ function createServer(configPath) {
 }
 
 class UserError extends Error {}
+
+// 合言葉の比較(比べる時間から中身を推測されないよう、一定時間で比較する)
+function sameToken(given, token) {
+  const a = Buffer.from(String(given || ''));
+  const b = Buffer.from(token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 function readJson(req) {
   return new Promise((resolve, reject) => {

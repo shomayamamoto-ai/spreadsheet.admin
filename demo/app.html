@@ -447,6 +447,7 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
   function periodText(r) {
     if (!r.periodStart || !r.periodEnd) return '';
     if (r.periodKind === 'year') return r.periodEnd.slice(0, 4) + '年分';
+    if (r.periodKind === 'date') return jpDate(r.periodEnd);
     if (r.periodStart.slice(0, 7) === r.periodEnd.slice(0, 7)) return r.periodEnd.slice(0, 4) + '年' + (+r.periodEnd.slice(5, 7)) + '月分';
     return jpDate(r.periodStart) + '〜' + jpDate(r.periodEnd);
   }
@@ -637,7 +638,9 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
 
   // 顧問先 × 書類種別の保存状況
   function renderStatus(views) {
-    var types = DOC_TYPE_NAMES.filter(function (t) { return t !== '総勘定元帳' && t !== '請求書'; });
+    // 顧問先ごとに毎期そろえる、主な書類だけを並べる
+    var MAIN = ['月次試算表', '決算書', '法人税申告書', '消費税申告書', '源泉所得税納付書', '源泉徴収票・年末調整'];
+    var types = DOC_TYPE_NAMES.filter(function (t) { return MAIN.indexOf(t) >= 0; });
     var head = '<thead><tr class="names"><th>顧問先</th>' + types.map(function (t) { return '<th>' + esc(t) + '</th>'; }).join('') + '</tr></thead>';
     var body = CLIENTS.map(function (c) {
       var cells = types.map(function (t) {

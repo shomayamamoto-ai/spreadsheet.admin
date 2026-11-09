@@ -95,3 +95,25 @@ test('「関与先コード」「関与先名」と書かれたPDFも読み取�
   assert.strictEqual(r.clientName, '有限会社みなと商店');
   assert.strictEqual(r.status, 'OK');
 });
+
+// ---- 税理士事務所でよく見る書き方・書類 ----
+const CASES = [
+  ['「令和7年3月期」を事業年度として読む', '決算報告書\n顧問先名:株式会社さくら建設\n令和7年3月期', { docType: '決算書', periodStart: '2024-04-01', periodEnd: '2025-03-31', file: '10001_株式会社さくら建設_2025年3月期_決算書.pdf' }],
+  ['12月決算の「2024年12月期」', '決算報告書\n顧問先名:有限会社みなと商店\n2024年12月期', { periodStart: '2024-01-01', periodEnd: '2024-12-31' }],
+  ['納期の特例「1月から6月分」', '所得税徴収高計算書(納期の特例分)\n氏名又は名称:株式会社さくら建設\n令和7年1月から6月分\n合計額 120,000', { docType: '源泉所得税納付書', periodStart: '2025-01-01', periodEnd: '2025-06-30', amount: 120000, file: '10001_株式会社さくら建設_2025-01〜06_源泉所得税納付書.pdf' }],
+  ['「R7.3.31現在」の試算表', '合計残高試算表\n顧問先名:株式会社さくら建設\nR7.3.31現在', { docType: '月次試算表', periodEnd: '2025-03-31', file: '10001_株式会社さくら建設_2025-03_月次試算表.pdf' }],
+  ['法定調書合計表', '給与所得の源泉徴収票等の法定調書合計表\n名称:株式会社さくら建設\n令和6年分', { docType: '法定調書合計表', periodEnd: '2024-12-31' }],
+  ['給与支払報告書(源泉徴収票と区別する)', '給与支払報告書(総括表)\n名称:株式会社さくら建設\n令和6年分 給与所得', { docType: '給与支払報告書', periodEnd: '2024-12-31' }],
+  ['償却資産申告書(1月1日現在)', '償却資産申告書(償却資産課税台帳)\n所有者 名称:株式会社さくら建設\n令和7年1月1日現在', { docType: '償却資産申告書', file: '10001_株式会社さくら建設_2025年分_償却資産申告書.pdf' }],
+  ['届出書は提出日で整理', '給与支払事務所等の開設届出書\n名称:株式会社さくら建設\n提出日:令和7年4月10日', { docType: '届出書・申請書', periodEnd: '2025-04-10', file: '10001_株式会社さくら建設_2025-04-10_届出書・申請書.pdf', folder: '2025年' }],
+  ['議事録は開催日で整理', '臨時株主総会議事録\n株式会社さくら建設\n開催日時:令和7年6月20日 午前10時', { docType: '議事録', periodEnd: '2025-06-20' }]
+];
+for (const [name, text, exp] of CASES) {
+  test(name, () => {
+    const r = X.extract(text, { clients: CLIENTS });
+    assert.strictEqual(r.status, 'OK', r.issues.join(' / '));
+    for (const k of ['docType', 'periodStart', 'periodEnd', 'amount']) if (k in exp) assert.strictEqual(r[k], exp[k], k);
+    if (exp.file) assert.strictEqual(r.suggestedFileName, exp.file);
+    if (exp.folder) assert.strictEqual(r.suggestedFolder[1], exp.folder);
+  });
+}

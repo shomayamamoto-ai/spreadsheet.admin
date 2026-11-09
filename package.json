@@ -8,7 +8,8 @@
     "samples": "python3 scripts/generate_samples.py",
     "test": "node scripts/build.js && node --test test/*.test.js",
     "local": "node local/sorter.js",
-    "local:app": "node local/server.js --config local/config.json"
+    "local:app": "node local/server.js --config local/config.json",
+    "evaluate": "node local/evaluate.js"
   },
   "dependencies": {
     "pdfjs-dist": "3.11.174"
