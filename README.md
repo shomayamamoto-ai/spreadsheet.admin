@@ -14,12 +14,13 @@
 |---|---|
 | `src/extractor.js` | 読み取りルールの本体(書類種別・顧問先・期間・金額の判定) |
 | `src/pdftext.js` | pdf.js で取り出した文字を「行」にまとめる処理 |
+| `src/privacy.js` | 個人情報を伏せ字にする処理(相談用) |
 | `demo/` | ブラウザで動くデモ画面(提案の場で見せる用) |
 | `gas/` | Google Apps Script 版(Googleドライブ+スプレッドシートで実際に動く原型) |
 | `scripts/generate_samples.py` | サンプルPDFを作るスクリプト |
 | `test/` | 読み取りルールの自動テスト |
 
-`demo/extractor.js` と `gas/Extractor.js` は、`src/` からの自動コピーです。
+`demo/extractor.js`・`demo/pdftext.js`・`demo/privacy.js`・`gas/Extractor.js` は、`src/` からの自動コピーです。
 ルールを直すときは `src/` を編集し、`npm run build` を実行してください。
 
 ## 1. ブラウザ版デモを動かす
@@ -53,6 +54,7 @@ python3 -m http.server 8000
    - `Extractor.js` → ファイルを追加して貼り付け
    - `appsscript.json` → 「プロジェクトの設定」で
      「appsscript.json をエディタで表示する」をONにして貼り付け
+     (**必ず貼り付けてください**。外部へ送信できないようにする権限の設定が入っています)
 4. 左側の「サービス」から **Drive API** を追加する
    (`appsscript.json` を貼り付けた場合は追加済みになります)
 5. スプレッドシートを再読み込みし、
@@ -94,6 +96,23 @@ python3 -m http.server 8000
 ```bash
 npm test
 ```
+
+## 個人情報の扱い(AIに渡さない仕組み)
+
+| 仕組み | 場所 |
+|---|---|
+| AIを使わず、ルールで読み取る | `src/extractor.js` |
+| Apps Script に外部通信の権限(`script.external_request`)を付けない | `gas/appsscript.json` の `oauthScopes` |
+| 外部送信の命令・権限が入っていないかを自動テストで確認 | `test/privacy.test.js` |
+| 相談用の伏せ字版を作る(氏名・住所・個人番号・生年月日・電話・メール・口座・会社名・事務所名・金額) | `src/privacy.js`(デモ画面の「伏せ字版」) |
+| 手元で開くデモは、ブラウザの機能で同じ場所以外への通信を禁止 | `demo/index.html` の Content-Security-Policy |
+
+`appsscript.json` の `oauthScopes` に外部通信の権限を追加すると、
+`npm test` が失敗するようにしてあります。権限を追加する場合は、
+事務所の規程を確認してから、テストもあわせて見直してください。
+
+伏せ字機能は、見出しや敬称が付いていない人名を見落とすことがあります。
+伏せ字版も、渡す前に必ず目で確認してください。
 
 ## 注意事項
 

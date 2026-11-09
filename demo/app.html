@@ -137,7 +137,7 @@ table.sheet { border-collapse: collapse; width: 100%; min-width: 1060px; font-si
 /* 下段:詳細 + フォルダ */
 .lower { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .detail-body { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 16px; padding: 14px; }
-.preview { border: 1px solid var(--rule); background: #fff; border-radius: 2px; min-height: 120px; display: grid; place-items: center; overflow: hidden; }
+.preview { border: 1px solid var(--rule); background: #fff; border-radius: 2px; min-height: 120px; display: grid; place-items: center; overflow: hidden; align-self: start; }
 .preview canvas { width: 100%; height: auto; display: block; }
 dl.fields { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
 dl.fields dt { color: var(--muted); }
@@ -217,6 +217,27 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
 .status-grid table.sheet { min-width: 860px; }
 .status-note { padding: 10px 14px; margin: 0; font-size: 12.5px; color: var(--muted); }
 
+/* 個人情報の守り方 */
+.privacy { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.guard { border: 1px solid var(--rule); border-radius: 4px; padding: 12px 14px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.guard b { font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+.guard span { font-weight: 700; }
+.guard small { color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+.net { margin: 0 14px 14px; border-top: 1px solid var(--rule); padding-top: 10px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; align-items: baseline; font-size: 13px; }
+.net strong { font-size: 22px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.net strong.bad { color: var(--err); }
+.net ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+.net .net-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+
+.masked { margin-top: 12px; border: 1px solid var(--rule-strong); border-radius: 4px; padding: 10px 12px; display: grid; gap: 8px; }
+.masked h3 { margin: 0; font-size: 13.5px; }
+.masked p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; background: var(--head); border: 1px solid var(--rule); border-radius: 999px; padding: 0 8px; white-space: nowrap; }
+.masked pre { max-height: 200px; overflow: auto; background: var(--paper); border: 1px solid var(--rule); padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; }
+.masked pre mark { background: var(--warn-soft); color: var(--warn); border-radius: 2px; padding: 0 2px; }
+.masked .warn-line { color: var(--warn); }
+
 .calc { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; padding: 14px; align-items: center; }
 .calc-inputs { display: grid; gap: 8px; }
 .calc-inputs label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 13px; }
@@ -227,6 +248,7 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
 .calc-out small { font-size: 13px; margin-left: 2px; }
 
 @media (max-width: 900px) {
+  .privacy { grid-template-columns: minmax(0, 1fr); }
   .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calc { grid-template-columns: minmax(0, 1fr); }
 }
@@ -250,6 +272,23 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
     <div class="step"><b>STEP 1</b><span>PDFを入れる</span><small>作成した書類をPDFにして、<br>いつもの受付フォルダへ保存するだけ。</small></div>
     <div class="step"><b>STEP 2</b><span>中身を読み取る</span><small>書類種別・顧問先コード・期間・金額を<br>自動で拾い、一覧表に1行ずつ記録。</small></div>
     <div class="step"><b>STEP 3</b><span>名前を付けて仕分け</span><small>「顧問先/年度/書類種別」のフォルダへ移動。<br>迷うものや重複は、人が確認してから確定。</small></div>
+  </section>
+
+  <section class="panel" aria-labelledby="privacy-title">
+    <div class="panel-head"><h2 id="privacy-title">個人情報の守り方</h2><span class="hint">AIにも外部にも、書類の中身を渡さない仕組み</span></div>
+    <div class="privacy">
+      <div class="guard"><b>守り方 1</b><span>AIを使わずに読み取る</span>
+        <small>書類種別や期間は、キーワードと書式のルールで判定します。<br>読み取りのために、書類をAIへ送ることはありません。</small></div>
+      <div class="guard"><b>守り方 2</b><span>外部へ送れない設定にする</span>
+        <small>本番のGoogle版は、外部と通信する権限を<br>あえて付けていません。<br>送ろうとしても、Google側で止まります。</small></div>
+      <div class="guard"><b>守り方 3</b><span>相談するときは伏せ字版だけ</span>
+        <small>迷った書類をAIや外部に相談したいときは、<br>氏名・住所・マイナンバー・会社名・金額などを<br>伏せた文字だけをコピーできます。</small></div>
+    </div>
+    <div class="net" aria-live="polite">
+      <strong id="net-send">0</strong><span>件:このページから外部へデータを送った通信(PDFや読み取り結果の送信)</span>
+      <strong id="net-load" style="color:var(--ink)">0</strong><span>件:外部から部品を読み込んだ通信(下の一覧)<ul id="net-list"></ul></span>
+      <span class="net-note">※ ブラウザの通信記録から、このページ自身の通信を数えています。デモを公開しているサイト自体の仕組みによる通信は対象外です。</span>
+    </div>
   </section>
 
   <section class="controls">
@@ -350,6 +389,7 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <script src="extractor.js"></script>
 <script src="pdftext.js"></script>
+<script src="privacy.js"></script>
 <script>
 (function () {
   'use strict';
@@ -630,9 +670,11 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
       '<dt>新ファイル名</dt><dd>' + esc(v.placed ? v.suggestedFileName : '(確定後に付きます)') + '</dd>' +
       '<dt>保存先</dt><dd>' + esc(v.placed ? v.suggestedFolder.join(' / ') : v.status === '除外' ? '_重複(削除候補)' : '_要確認(人が確認してから移動)') + '</dd>' +
       '</dl>' + issues + actions + edit +
-      '<details class="raw"><summary>PDFから読み取った文字を見る</summary><pre>' + esc(row.text) + '</pre></details>' +
+      maskedBlock(row) +
+      '<details class="raw"><summary>PDFから読み取った文字(原文)を見る</summary><pre>' + esc(row.text) + '</pre></details>' +
       '</div></div>';
     bindDetail(row);
+    bindMasked(row);
     drawPreview(row, id);
   }
 
@@ -653,6 +695,35 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
       (row.fix ? '<button type="button" id="ed-reset">手直しを取り消す</button>' : '') + '</div>';
     if (open) return '<div class="edit"><h3>内容を直して確定する</h3>' + body + '</div>';
     return '<details class="raw"><summary>読み取り結果を手直しする</summary><div class="edit">' + body + '</div></details>';
+  }
+
+  // ---------- 伏せ字版 ----------
+  function maskedOf(row) {
+    return PrivacyGuard.mask(row.text, { clients: CLIENTS, maskAmounts: $('mask-amount') ? $('mask-amount').checked : true });
+  }
+  function maskedHtml(text) {
+    return esc(text).replace(/\[[^\]\n]{1,10}\]/g, function (m) { return '<mark>' + m + '</mark>'; });
+  }
+  function maskedBlock(row) {
+    var m = maskedOf(row);
+    var chips = Object.keys(m.found).map(function (k) { return '<span class="chip">' + esc(k) + ' ' + m.found[k] + '</span>'; }).join('');
+    return '<details class="raw" id="masked-wrap"><summary>AIや外部に相談するときの「伏せ字版」</summary><div class="masked">' +
+      '<p>原文ではなく、この伏せ字版だけを渡してください。伏せた項目は次のとおりです。</p>' +
+      '<div class="chips" id="masked-chips">' + (chips || '<span class="chip">伏せる項目は見つかりませんでした</span>') + '</div>' +
+      '<label for="mask-amount" style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input id="mask-amount" type="checkbox" checked> 金額も伏せる</label>' +
+      '<pre id="masked-text">' + maskedHtml(m.text) + '</pre>' +
+      '<p class="warn-line">「氏名:」などの見出しが付いていない人名は、見つけられないことがあります。渡す前に、必ず目で確認してください。</p>' +
+      '<div class="btns"><button type="button" class="primary" id="btn-copy-masked">伏せ字版をコピー</button></div>' +
+      '</div></details>';
+  }
+  function bindMasked(row) {
+    if (!$('btn-copy-masked')) return;
+    $('mask-amount').addEventListener('change', function () {
+      var m = maskedOf(row);
+      $('masked-text').innerHTML = maskedHtml(m.text);
+      $('masked-chips').innerHTML = Object.keys(m.found).map(function (k) { return '<span class="chip">' + esc(k) + ' ' + m.found[k] + '</span>'; }).join('');
+    });
+    $('btn-copy-masked').addEventListener('click', function () { copyText(maskedOf(row).text, '伏せ字版をコピーしました'); });
   }
 
   function readForm() {
@@ -793,19 +864,43 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
     rows.forEach(function (row) { if (row.text) analyze(row); });
     if (selectedId !== null) select(selectedId); else render();
   });
-  $('btn-copy').addEventListener('click', function () {
-    var text = tsv();
+  function copyText(text, okMsg) {
     var fallback = function () {
       var ta = document.createElement('textarea');
       ta.value = text; document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); toast('コピーしました。スプレッドシートに貼り付けできます'); }
+      try { document.execCommand('copy'); toast(okMsg); }
       catch (e) { toast('コピーできませんでした'); }
       document.body.removeChild(ta);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { toast('コピーしました。スプレッドシートに貼り付けできます'); }, fallback);
+      navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
     } else { fallback(); }
-  });
+  }
+  $('btn-copy').addEventListener('click', function () { copyText(tsv(), 'コピーしました。スプレッドシートに貼り付けできます'); });
+
+  // ---------- このページの通信を数える ----------
+  var PLATFORM = /(^|\.)(claude\.ai|claudeusercontent\.com|anthropic\.com)$/;
+  function renderNet() {
+    if (!window.performance || !performance.getEntriesByType) return;
+    var sends = 0, loads = {};
+    performance.getEntriesByType('resource').forEach(function (e) {
+      var u;
+      try { u = new URL(e.name, location.href); } catch (x) { return; }
+      if (u.origin === location.origin || u.protocol === 'data:' || u.protocol === 'blob:' || PLATFORM.test(u.hostname)) return;
+      if (['fetch', 'xmlhttprequest', 'beacon'].indexOf(e.initiatorType) >= 0) sends++;
+      else loads[u.hostname] = (loads[u.hostname] || 0) + 1;
+    });
+    var label = { 'cdnjs.cloudflare.com': 'PDFを表示・読み取る部品', 'fonts.googleapis.com': '文字の形(フォント)の設定', 'fonts.gstatic.com': '文字の形(フォント)' };
+    var hosts = Object.keys(loads);
+    $('net-send').textContent = sends;
+    $('net-send').className = sends ? 'bad' : '';
+    $('net-load').textContent = hosts.reduce(function (a, h) { return a + loads[h]; }, 0);
+    $('net-list').innerHTML = hosts.map(function (h) { return '<li>' + esc(h) + '(' + esc(label[h] || 'その他') + ')' + loads[h] + '件</li>'; }).join('');
+  }
+  try {
+    new PerformanceObserver(renderNet).observe({ type: 'resource', buffered: true });
+  } catch (e) { /* 古いブラウザでは表示だけ省略 */ }
+  renderNet();
 
   render();
   loadSamples(); // 開いた時点でサンプルを読み取った状態にする
