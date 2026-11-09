@@ -1,0 +1,942 @@
+<!doctype html>
+<!-- ※ このファイルは demo/app.html から自動生成されます。編集は app.html で行ってください。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'self'; form-action 'none'">
+<style>[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<title>PDF仕分けアシスタント</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho:wght@700&display=swap">
+<style>
+/* Layout: 帳簿の罫線を思わせる緑の細罫。上に流れ(入れる→読む→仕分け)、下に表と詳細を並べる */
+:root {
+  --paper: #f4f7f5;
+  --surface: #ffffff;
+  --ink: #1c2923;
+  --muted: #56675e;
+  --rule: #cddbd3;
+  --rule-strong: #9fbcae;
+  --accent: #1d6a50;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2efe8;
+  --warn: #8f5200;
+  --warn-soft: #fff0d9;
+  --err: #b3261e;
+  --head: #eaf1ed;
+  --font-body: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  --font-display: "BIZ UDPMincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3;
+    --rule: #2b3a33; --rule-strong: #3f574b; --accent: #62c39a; --accent-ink: #0d1a14;
+    --accent-soft: #1b3228; --warn: #f2b65c; --warn-soft: #3a2a12; --err: #f28b82; --head: #1e2a24;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3;
+  --rule: #2b3a33; --rule-strong: #3f574b; --accent: #62c39a; --accent-ink: #0d1a14;
+  --accent-soft: #1b3228; --warn: #f2b65c; --warn-soft: #3a2a12; --err: #f28b82; --head: #1e2a24;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+
+header.top {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 12px 24px; padding-block: 28px 18px; border-bottom: 2px solid var(--accent);
+}
+header.top h1 {
+  font-family: var(--font-display); font-size: 26px; line-height: 1.3; margin: 0;
+  letter-spacing: 0.04em; text-wrap: balance;
+}
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.badge-demo {
+  font-size: 12px; letter-spacing: 0.08em; border: 1px solid var(--rule-strong);
+  color: var(--muted); padding: 2px 10px; border-radius: 3px; white-space: nowrap;
+}
+
+/* 流れ(3ステップ) */
+.flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.step {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 14px 16px; display: grid; gap: 4px; min-width: 0;
+}
+.step b { font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+.step span { font-weight: 700; }
+.step small { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+
+/* 操作エリア */
+.controls { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
+.drop {
+  border: 1.5px dashed var(--rule-strong); border-radius: 4px; background: var(--surface);
+  padding: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px;
+  transition: background .15s, border-color .15s;
+}
+.drop.over { background: var(--accent-soft); border-color: var(--accent); }
+.drop p { margin: 0; flex: 1 1 220px; min-width: 0; }
+.drop p small { display: block; color: var(--muted); font-size: 12.5px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button, .filebtn {
+  font: inherit; font-size: 13.5px; cursor: pointer; border-radius: 4px; padding: 7px 14px;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+button.primary, .filebtn { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button:hover, .filebtn:hover { filter: brightness(0.96); }
+button:focus-visible, .filebtn:focus-within, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.summary {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 14px 16px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: center;
+}
+.stat { display: grid; gap: 0; }
+.stat em { font-style: normal; font-size: 12px; color: var(--muted); }
+.stat strong { font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.stat.ok strong { color: var(--accent); }
+.stat.warn strong { color: var(--warn); }
+.master-toggle { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 8px; }
+
+/* スプレッドシート風の表 */
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
+.panel-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--rule);
+}
+.panel-head h2 { font-size: 15px; margin: 0; }
+.panel-head .hint { font-size: 12.5px; color: var(--muted); }
+.sheet-scroll { overflow-x: auto; }
+table.sheet { border-collapse: collapse; width: 100%; min-width: 1060px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.sheet th, .sheet td { border: 1px solid var(--rule); padding: 5px 8px; text-align: left; vertical-align: top; }
+.sheet thead tr.letters th { background: var(--head); color: var(--muted); font-weight: 400; font-size: 11.5px; text-align: center; padding: 2px 4px; }
+.sheet thead tr.names th { background: var(--accent-soft); font-weight: 700; white-space: nowrap; }
+.sheet .rownum { background: var(--head); color: var(--muted); text-align: center; width: 36px; font-size: 11.5px; }
+.sheet tbody tr { cursor: pointer; }
+.sheet tbody tr:hover td:not(.rownum) { background: var(--accent-soft); }
+.sheet tbody tr.sel td:not(.rownum) { background: var(--accent-soft); box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+.sheet td.num { text-align: right; white-space: nowrap; }
+.sheet td.file { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; min-width: 240px; }
+.sheet td.nowrap { white-space: nowrap; }
+.sheet td.empty { color: var(--muted); }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.loading { background: var(--head); color: var(--muted); }
+.tag-sample { font-size: 11px; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+
+/* 下段:詳細 + フォルダ */
+.lower { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.detail-body { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 16px; padding: 14px; }
+.preview { border: 1px solid var(--rule); background: #fff; border-radius: 2px; min-height: 120px; display: grid; place-items: center; overflow: hidden; align-self: start; }
+.preview canvas { width: 100%; height: auto; display: block; }
+dl.fields { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+dl.fields dt { color: var(--muted); }
+dl.fields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+dl.fields dd small { color: var(--muted); }
+.issues { margin: 10px 0 0; padding: 8px 12px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; font-size: 13px; }
+.issues ul { margin: 2px 0 0; padding-left: 18px; }
+details.raw { margin-top: 12px; }
+details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+details.raw pre { max-height: 240px; overflow: auto; background: var(--paper); border: 1px solid var(--rule); padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
+.placeholder { padding: 24px 14px; color: var(--muted); }
+
+.tree { list-style: none; margin: 0; padding: 12px 14px 14px; font-size: 13px; }
+.tree ul { list-style: none; margin: 0; padding-left: 18px; border-left: 1px solid var(--rule); }
+.tree li { padding: 2px 0 2px 6px; overflow-wrap: anywhere; }
+.tree .folder::before, .tree .pdf::before {
+  content: ""; display: inline-block; width: 12px; height: 9px; margin-right: 6px; vertical-align: 0; border-radius: 1px;
+}
+.tree .folder::before { background: var(--accent); }
+.tree .folder.review::before { background: var(--warn); }
+.tree .pdf { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tree .pdf::before { width: 8px; height: 10px; border: 1px solid var(--muted); background: transparent; }
+
+.note { font-size: 12.5px; color: var(--muted); line-height: 1.8; margin: 0; }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 4px; font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .flow, .controls, .lower { grid-template-columns: minmax(0, 1fr); }
+  .detail-body { grid-template-columns: minmax(0, 1fr); }
+  .preview { max-width: 260px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---- 改良版で追加した部品 ---- */
+.summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat.dup strong { color: var(--err); }
+.pill.done { background: var(--accent); color: var(--accent-ink); }
+.pill.dup { background: var(--warn-soft); color: var(--err); }
+.pill.excluded { background: var(--head); color: var(--muted); }
+tr.excluded td:not(.rownum) { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--rule-strong); }
+.sheet td.changed { box-shadow: inset 3px 0 0 var(--accent); }
+
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab {
+  border: 1px solid var(--rule); background: var(--paper); color: var(--muted); font-weight: 700;
+  border-radius: 4px 4px 0 0; padding: 6px 14px; font-size: 13.5px;
+}
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); border-color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; border-bottom: 1px solid var(--rule); align-items: center; }
+.filters label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+select, input[type="text"], input[type="date"], input[type="number"] {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule-strong); border-radius: 4px; padding: 4px 8px; max-width: 100%;
+}
+input[type="text"] { width: 12em; }
+input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.filters .count { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+
+.edit { margin-top: 12px; border: 1px solid var(--accent); border-radius: 4px; padding: 12px; background: var(--accent-soft); display: grid; gap: 10px; }
+.edit h3 { margin: 0; font-size: 13.5px; }
+.edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.edit-grid label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); min-width: 0; }
+.edit-grid select, .edit-grid input { width: 100%; }
+.edit .preview-name { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.status-grid th, .status-grid td { text-align: center; }
+.status-grid td:first-child, .status-grid th:first-child { text-align: left; white-space: nowrap; }
+.status-grid td.has { color: var(--accent); font-weight: 700; }
+.status-grid td.has small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.status-grid td.none { color: var(--muted); font-size: 12px; }
+.status-grid table.sheet { min-width: 860px; }
+.status-note { padding: 10px 14px; margin: 0; font-size: 12.5px; color: var(--muted); }
+
+/* 個人情報の守り方 */
+.privacy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.local-flow { margin: 0 14px 14px; padding: 10px 12px; background: var(--accent-soft); border-radius: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; font-size: 13px; }
+.lf-step { background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 3px; padding: 2px 10px; white-space: nowrap; }
+.lf-step.lf-ai { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.lf-arrow { width: 14px; height: 1px; background: var(--muted); position: relative; }
+.lf-arrow::after { content: ""; position: absolute; right: 0; top: -3px; border: 3.5px solid transparent; border-left: 5px solid var(--muted); border-right: 0; }
+.lf-note { flex-basis: 100%; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.guard { border: 1px solid var(--rule); border-radius: 4px; padding: 12px 14px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.guard b { font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+.guard span { font-weight: 700; }
+.guard small { color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+.net { margin: 0 14px 14px; border-top: 1px solid var(--rule); padding-top: 10px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; align-items: baseline; font-size: 13px; }
+.net strong { font-size: 22px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.net strong.bad { color: var(--err); }
+.net ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+.net .net-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+
+.masked { margin-top: 12px; border: 1px solid var(--rule-strong); border-radius: 4px; padding: 10px 12px; display: grid; gap: 8px; }
+.masked h3 { margin: 0; font-size: 13.5px; }
+.masked p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; background: var(--head); border: 1px solid var(--rule); border-radius: 999px; padding: 0 8px; white-space: nowrap; }
+.masked pre { max-height: 200px; overflow: auto; background: var(--paper); border: 1px solid var(--rule); padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; }
+.masked pre mark { background: var(--warn-soft); color: var(--warn); border-radius: 2px; padding: 0 2px; }
+.masked .warn-line { color: var(--warn); }
+
+.calc { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; padding: 14px; align-items: center; }
+.calc-inputs { display: grid; gap: 8px; }
+.calc-inputs label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 13px; }
+.calc-out { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.calc-out div { border-left: 3px solid var(--accent); padding: 4px 10px; }
+.calc-out em { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
+.calc-out strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.calc-out small { font-size: 13px; margin-left: 2px; }
+
+@media (max-width: 900px) {
+  .privacy { grid-template-columns: minmax(0, 1fr); }
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calc { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .edit-grid { grid-template-columns: minmax(0, 1fr); }
+  .filters .count { margin-left: 0; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>PDF仕分けアシスタント</h1>
+      <p>保存フォルダに放り込まれた書類PDFを読み取り、<br>
+        書類種別・顧問先・対象期間ごとにスプレッドシートへ整理します。</p>
+    </div>
+    <span class="badge-demo">提案用デモ・架空データ</span>
+  </header>
+
+  <section class="flow" aria-label="処理の流れ">
+    <div class="step"><b>STEP 1</b><span>PDFを入れる</span><small>作成した書類をPDFにして、<br>いつもの受付フォルダへ保存するだけ。</small></div>
+    <div class="step"><b>STEP 2</b><span>中身を読み取る</span><small>書類種別・顧問先コード・期間・金額を<br>自動で拾い、一覧表に1行ずつ記録。</small></div>
+    <div class="step"><b>STEP 3</b><span>名前を付けて仕分け</span><small>「顧問先/年度/書類種別」のフォルダへ移動。<br>迷うものや重複は、人が確認してから確定。</small></div>
+  </section>
+
+  <section class="panel" aria-labelledby="privacy-title">
+    <div class="panel-head"><h2 id="privacy-title">個人情報の守り方</h2><span class="hint">書類の中身を、事務所の外のAIやサーバーに渡さない仕組み</span></div>
+    <div class="privacy">
+      <div class="guard"><b>守り方 1</b><span>AIは事務所のパソコンの中だけ</span>
+        <small>まずルールで読み取り、迷った書類だけを<br>事務所のパソコン内で動くAI(ローカルAI)が補います。<br>外部のAIサービスには送りません。</small></div>
+      <div class="guard"><b>守り方 2</b><span>外部へ送れない設定にする</span>
+        <small>ローカルAI版は、通信先を「このパソコン自身」に限定。<br>Google版は外部と通信する権限を付けていません。<br>送ろうとしても止まります。</small></div>
+      <div class="guard"><b>守り方 3</b><span>AIの思い込みを採用しない</span>
+        <small>AIには答えの根拠の文章も出させ、<br>本当にPDFに書いてあるかをプログラムで照合。<br>確かめられない答えは使わず、人の確認に回します。</small></div>
+      <div class="guard"><b>守り方 4</b><span>相談するときは伏せ字版だけ</span>
+        <small>迷った書類を外部に相談したいときは、<br>氏名・住所・マイナンバー・会社名・金額などを<br>伏せた文字だけをコピーできます。</small></div>
+    </div>
+    <div class="local-flow" aria-label="ローカルAI版の流れ">
+      <span class="lf-step">PDFを受付フォルダへ</span><span class="lf-arrow" aria-hidden="true"></span>
+      <span class="lf-step">ルールで読み取り</span><span class="lf-arrow" aria-hidden="true"></span>
+      <span class="lf-step lf-ai">迷ったらパソコン内のAI</span><span class="lf-arrow" aria-hidden="true"></span>
+      <span class="lf-step">根拠をPDFと照合</span><span class="lf-arrow" aria-hidden="true"></span>
+      <span class="lf-step">一覧表とフォルダへ</span>
+      <span class="lf-note">すべて事務所のパソコンの中で完結します。※ このデモ画面はルールだけで動いています。ローカルAI版は、事務所のパソコンに入れて使います。</span>
+    </div>
+    <div class="net" aria-live="polite">
+      <strong id="net-send">0</strong><span>件:このページから外部へデータを送った通信(PDFや読み取り結果の送信)</span>
+      <strong id="net-load" style="color:var(--ink)">0</strong><span>件:外部から部品を読み込んだ通信(下の一覧)<ul id="net-list"></ul></span>
+      <span class="net-note">※ ブラウザの通信記録から、このページ自身の通信を数えています。デモを公開しているサイト自体の仕組みによる通信は対象外です。</span>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="drop" id="drop">
+      <p>ここにPDFをドラッグ&ドロップ
+        <small>読み取りはこのブラウザの中だけで行い、<br>PDFをサーバーへ送信しません。</small></p>
+      <div class="btns">
+        <label class="filebtn" for="file">PDFを選ぶ<input id="file" type="file" accept="application/pdf,.pdf" multiple></label>
+        <button id="btn-sample" type="button">サンプル9件を読み直す</button>
+        <button id="btn-clear" type="button">表を空にする</button>
+      </div>
+    </div>
+    <div class="summary" aria-live="polite">
+      <div class="stat"><em>読み取った件数</em><strong id="s-total">0</strong></div>
+      <div class="stat ok"><em>仕分け済み</em><strong id="s-ok">0</strong></div>
+      <div class="stat warn"><em>要確認</em><strong id="s-warn">0</strong></div>
+      <div class="stat dup"><em>重複の疑い</em><strong id="s-dup">0</strong></div>
+      <label class="master-toggle" for="use-master"><input id="use-master" type="checkbox" checked> 顧問先マスタ(4社)と照合して、名前の表記ゆれをそろえる</label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-list" aria-selected="true" aria-controls="view-list" type="button">書類一覧</button>
+        <button class="tab" role="tab" id="tab-status" aria-selected="false" aria-controls="view-status" type="button">顧問先ごとの保存状況</button>
+      </div>
+      <button id="btn-copy" type="button" class="primary">表をコピー(スプシに貼り付け可)</button>
+    </div>
+
+    <div id="view-list" role="tabpanel" aria-labelledby="tab-list">
+      <div class="filters">
+        <label for="f-client">顧問先 <select id="f-client"><option value="">すべて</option></select></label>
+        <label for="f-type">書類種別 <select id="f-type"><option value="">すべて</option></select></label>
+        <label for="f-status">ステータス <select id="f-status">
+          <option value="">すべて</option><option value="todo">要確認・重複のみ</option><option value="done">仕分け済みのみ</option>
+        </select></label>
+        <label for="f-text">検索 <input id="f-text" type="text" placeholder="ファイル名・会社名"></label>
+        <span class="count" id="f-count"></span>
+      </div>
+      <div class="sheet-scroll">
+        <table class="sheet" id="sheet">
+          <thead>
+            <tr class="letters"><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th></tr>
+            <tr class="names"><th class="rownum">1</th><th>ステータス</th><th>書類種別</th><th>顧問先コード</th><th>顧問先名</th><th>対象期間</th><th>作成日</th><th>金額</th><th>新ファイル名</th><th>元のファイル名</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-status" role="tabpanel" aria-labelledby="tab-status" hidden>
+      <p class="status-note">顧問先ごとに、どの書類が保存済みかを一覧にしたものです。<br>
+        「未保存」の欄を見れば、作成漏れや保存漏れに気づけます(マスタに登録された顧問先が対象)。</p>
+      <div class="sheet-scroll status-grid"><table class="sheet" id="status-table"></table></div>
+    </div>
+  </section>
+
+  <section class="lower">
+    <div class="panel">
+      <div class="panel-head"><h2>読み取りの根拠と手直し</h2><span class="hint" id="detail-name"></span></div>
+      <div id="detail"><p class="placeholder">表の行を選ぶと、PDFの1ページ目と、<br>どの文字を手がかりに判定したかを表示します。</p></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>仕分け後のフォルダ</h2><span class="hint">Googleドライブ上の並び</span></div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="calc-title">
+    <div class="panel-head"><h2 id="calc-title">効果の試算</h2><span class="hint">数字を事務所の実績に置き換えてお使いください</span></div>
+    <div class="calc">
+      <div class="calc-inputs">
+        <label for="c-count">月に保存するPDFの件数 <span><input id="c-count" type="number" min="0" step="10" value="300"> 件</span></label>
+        <label for="c-min">1件あたりの仕分け時間(今) <span><input id="c-min" type="number" min="0" step="0.5" value="1"> 分</span></label>
+        <label for="c-rate">自動で仕分けできる割合 <span><input id="c-rate" type="number" min="0" max="100" step="5" value="80"> %</span></label>
+        <label for="c-check">要確認1件の確認時間 <span><input id="c-check" type="number" min="0" step="0.5" value="1"> 分</span></label>
+      </div>
+      <div class="calc-out" aria-live="polite">
+        <div><em>今の仕分け時間</em><strong id="o-before">0</strong><small>時間/月</small></div>
+        <div><em>導入後の確認時間</em><strong id="o-after">0</strong><small>時間/月</small></div>
+        <div><em>削減できる時間</em><strong id="o-save">0</strong><small>時間/月</small></div>
+        <div><em>年間にすると</em><strong id="o-year">0</strong><small>時間/年</small></div>
+      </div>
+    </div>
+    <p class="status-note" style="padding-top:0">※ 初期値は仮の数字です。「自動で仕分けできる割合」は、実際のPDFで試験運用して測った値を入れてください。</p>
+  </section>
+
+  <p class="note">
+    ※ サンプルPDFの会社名・金額はすべて架空です。帳票の見た目も一般的な会計帳票をまねたものです。<br>
+    実運用では、事務所で実際に使っている帳票に合わせて、読み取りルールを調整します。
+  </p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- 読み取り処理をページ内で動かすため、worker 本体も通常のスクリプトとして読み込む(別ドメインのWorkerが使えない環境への対策) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="extractor.js"></script>
+<script src="pdftext.js"></script>
+<script src="privacy.js"></script>
+<script>
+(function () {
+  'use strict';
+  var pdfjsLib = window['pdfjs-dist/build/pdf'];
+  if (!pdfjsLib) {
+    document.getElementById('rows').innerHTML = '<tr><td class="rownum">2</td><td colspan="9">PDFを読む部品を読み込めませんでした。ネットワークを確認して、ページを再読み込みしてください。</td></tr>';
+    return;
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // デモ用の顧問先マスタ(架空)
+  var CLIENTS = [
+    { code: '10001', name: '株式会社さくら建設', aliases: ['さくら建設'], fiscalEndMonth: 3 },
+    { code: '10002', name: '有限会社みなと商店', aliases: ['みなと商店'], fiscalEndMonth: 12 },
+    { code: '10003', name: '合同会社ひかりデザイン', aliases: ['ひかりデザイン'], fiscalEndMonth: 6 },
+    { code: '10004', name: '株式会社あおば食品', aliases: ['あおば食品'], fiscalEndMonth: 9 }
+  ];
+  var SAMPLES = [];
+  for (var s = 1; s <= 9; s++) SAMPLES.push('scan_000' + s + '.pdf');
+  var DOC_TYPE_NAMES = TaxDocExtractor.DOC_TYPES.map(function (d) { return d.name; });
+
+  var rows = [];
+  var selectedId = null;
+  var seq = 0;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- 表示用の小道具 ----------
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function yen(n) { return n == null ? '' : (n < 0 ? '△' : '') + Math.abs(n).toLocaleString('ja-JP'); }
+  function jpDate(v) {
+    if (!v) return '';
+    var p = v.split('-');
+    return p[0] + '/' + p[1] + (p[2] ? '/' + p[2] : '');
+  }
+  function periodText(r) {
+    if (!r.periodStart || !r.periodEnd) return '';
+    if (r.periodKind === 'year') return r.periodEnd.slice(0, 4) + '年分';
+    if (r.periodStart.slice(0, 7) === r.periodEnd.slice(0, 7)) return r.periodEnd.slice(0, 4) + '年' + (+r.periodEnd.slice(5, 7)) + '月分';
+    return jpDate(r.periodStart) + '〜' + jpDate(r.periodEnd);
+  }
+  // 保存状況の表などで使う短い表記(事業年度は「2025年3月期」)
+  function shortPeriod(r) {
+    if (r.periodKind !== 'month' && r.periodKind !== 'year' && r.periodEnd && r.periodStart && r.periodStart.slice(0, 7) !== r.periodEnd.slice(0, 7)) {
+      return r.periodEnd.slice(0, 4) + '年' + (+r.periodEnd.slice(5, 7)) + '月期';
+    }
+    return periodText(r);
+  }
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2400);
+  }
+  function clientByCode(code) {
+    return CLIENTS.filter(function (c) { return c.code === String(code); })[0] || null;
+  }
+
+  // ---------- 1行分の「最終的な値」を作る ----------
+  // 自動の読み取り結果(row.r)に、人の手直し(row.fix)と重複判定を重ねる
+  function view(row) {
+    if (!row.r) return null;
+    var v = Object.assign({}, row.r, { issues: row.r.issues.slice() });
+    if (row.fix) {
+      Object.assign(v, row.fix);
+      var dt = TaxDocExtractor.DOC_TYPES.filter(function (d) { return d.name === v.docType; })[0];
+      v.periodKind = dt ? dt.periodKind : v.periodKind;
+      var names = TaxDocExtractor.suggestNames(row.fix, clientByCode(row.fix.clientCode));
+      v.suggestedFileName = names.fileName;
+      v.suggestedFolder = names.folder;
+      v.status = '確定済み';
+      v.issues = [];
+    }
+    if (row.excluded) { v.status = '除外'; }
+    else if (row.dupOf) {
+      v.status = '重複の疑い';
+      v.issues.push('同じ顧問先・書類種別・期間の書類が、' + row.dupOf.rowNo + '行目にあります');
+    }
+    v.placed = v.status === 'OK' || v.status === '確定済み';
+    return v;
+  }
+
+  // 重複チェック:上の行から順に、同じキーが既にあれば「重複の疑い」
+  function markDuplicates() {
+    var seen = {};
+    rows.forEach(function (row, i) {
+      row.rowNo = i + 2;
+      row.dupOf = null;
+      if (!row.r || row.excluded) return;
+      var base = row.fix ? Object.assign({}, row.r, row.fix) : row.r;
+      var key = TaxDocExtractor.docKey(base);
+      if (!key) return;
+      if (seen[key] && !row.dupIgnored) row.dupOf = seen[key];
+      else if (!seen[key]) seen[key] = row;
+    });
+  }
+
+  function analyze(row) {
+    row.r = TaxDocExtractor.extract(row.text, { clients: $('use-master').checked ? CLIENTS : [] });
+  }
+
+  async function addPdf(name, buffer, isSample) {
+    var row = { id: ++seq, name: name, data: new Uint8Array(buffer), sample: isSample, text: null, r: null, error: null };
+    rows.push(row);
+    render();
+    try {
+      row.text = (await PdfText.extractText(pdfjsLib, row.data.slice())).text;
+      analyze(row);
+    } catch (e) {
+      row.error = 'PDFを開けませんでした(' + e.message + ')';
+    }
+    render();
+    return row;
+  }
+
+  async function loadSamples() {
+    rows = rows.filter(function (r) { return !r.sample; });
+    selectedId = null;
+    render();
+    for (var i = 0; i < SAMPLES.length; i++) {
+      try {
+        var res = await fetch('samples/' + SAMPLES[i]);
+        if (!res.ok) throw new Error(res.status);
+        await addPdf(SAMPLES[i], await res.arrayBuffer(), true);
+      } catch (e) {
+        toast('サンプルを読み込めませんでした:' + SAMPLES[i]);
+      }
+    }
+    // 最初は「要確認」の行を選んでおき、手直しの流れが見えるようにする
+    var firstTodo = rows.filter(function (r) { var v = view(r); return v && !v.placed && v.status !== '除外'; })[0];
+    var first = firstTodo || rows.filter(function (r) { return r.r; })[0];
+    if (first && selectedId === null) select(first.id);
+  }
+
+  // ---------- 描画 ----------
+  function pill(status) {
+    var cls = { 'OK': 'ok', '確定済み': 'done', '要確認': 'warn', '重複の疑い': 'dup', '除外': 'excluded' }[status] || 'warn';
+    return '<span class="pill ' + cls + '">' + esc(status) + '</span>';
+  }
+
+  function render() {
+    markDuplicates();
+    var views = rows.map(function (r) { return { row: r, v: view(r) }; });
+    var done = views.filter(function (x) { return x.v || x.row.error; });
+    $('s-total').textContent = done.length;
+    $('s-ok').textContent = done.filter(function (x) { return x.v && x.v.placed; }).length;
+    $('s-warn').textContent = done.filter(function (x) { return !x.v || x.v.status === '要確認'; }).length;
+    $('s-dup').textContent = done.filter(function (x) { return x.v && x.v.status === '重複の疑い'; }).length;
+
+    renderFilters(views);
+    var fc = $('f-client').value, ft = $('f-type').value, fs = $('f-status').value, fx = $('f-text').value.trim();
+    var shown = 0;
+    var html = views.map(function (x) {
+      var row = x.row, v = x.v;
+      if (v) {
+        if (fc && v.clientName !== fc) return '';
+        if (ft && v.docType !== ft) return '';
+        if (fs === 'todo' && (v.placed || v.status === '除外')) return '';
+        if (fs === 'done' && !v.placed) return '';
+        if (fx && (row.name + v.clientName + v.suggestedFileName + v.docType).indexOf(fx) < 0) return '';
+      } else if (fc || ft || fs === 'done' || fx) return '';
+      shown++;
+      var cls = [row.id === selectedId ? 'sel' : '', v && v.status === '除外' ? 'excluded' : ''].join(' ').trim();
+      var head = '<tr data-id="' + row.id + '"' + (cls ? ' class="' + cls + '"' : '') + '><td class="rownum">' + row.rowNo + '</td>';
+      if (!v) {
+        var st = row.error ? '<span class="pill warn">エラー</span>' : '<span class="pill loading">読み取り中</span>';
+        return head + '<td>' + st + '</td><td colspan="7" class="empty">' + esc(row.error || '') + '</td><td class="file">' + esc(row.name) + '</td></tr>';
+      }
+      var fixed = row.fix ? ' changed' : '';
+      function cell(val, extra) { return '<td class="' + (extra || '') + (val ? '' : ' empty') + '">' + (val ? esc(val) : '―') + '</td>'; }
+      var target = v.placed ? esc(v.suggestedFileName)
+        : '<span style="color:var(--warn)">(' + (v.status === '除外' ? '重複のため除外' : '要確認フォルダへ') + ')</span>';
+      return head + '<td>' + pill(v.status) + '</td>' +
+        cell(v.docType, 'nowrap' + fixed) + cell(v.clientCode, 'nowrap' + fixed) + cell(v.clientName, 'nowrap' + fixed) +
+        cell(periodText(v), 'nowrap' + fixed) + cell(jpDate(v.createdDate), 'nowrap') +
+        '<td class="num' + (v.amount == null ? ' empty' : '') + '">' + (v.amount == null ? '―' : esc(yen(v.amount))) + '</td>' +
+        '<td class="file">' + target + '</td>' +
+        '<td class="file">' + esc(row.name) + (row.sample ? '<span class="tag-sample">サンプル</span>' : '') + '</td></tr>';
+    }).join('');
+    $('rows').innerHTML = html || '<tr><td class="rownum">2</td><td colspan="9" class="empty">' +
+      (rows.length ? '条件に合う書類はありません。' : 'PDFを入れると、ここに1行ずつ追加されます。') + '</td></tr>';
+    $('f-count').textContent = rows.length ? shown + ' / ' + rows.length + ' 件を表示' : '';
+    renderTree(views);
+    renderStatus(views);
+    renderCalcRate(views);
+  }
+
+  function renderFilters(views) {
+    function fill(sel, values) {
+      var cur = sel.value;
+      var opts = ['<option value="">すべて</option>'].concat(values.map(function (x) { return '<option>' + esc(x) + '</option>'; }));
+      sel.innerHTML = opts.join('');
+      sel.value = values.indexOf(cur) >= 0 ? cur : '';
+    }
+    var clients = [], types = [];
+    views.forEach(function (x) {
+      if (!x.v) return;
+      if (x.v.clientName && clients.indexOf(x.v.clientName) < 0) clients.push(x.v.clientName);
+      if (x.v.docType && types.indexOf(x.v.docType) < 0) types.push(x.v.docType);
+    });
+    fill($('f-client'), clients.sort());
+    fill($('f-type'), DOC_TYPE_NAMES.filter(function (t) { return types.indexOf(t) >= 0; }));
+  }
+
+  function renderTree(views) {
+    var root = {};
+    views.forEach(function (x) {
+      if (!x.v && !x.row.error) return;
+      var path, file;
+      if (x.v && x.v.placed) { path = x.v.suggestedFolder; file = x.v.suggestedFileName; }
+      else if (x.v && x.v.status === '除外') { path = ['_重複(削除候補)']; file = x.row.name; }
+      else { path = ['_要確認']; file = x.row.name; }
+      var node = root;
+      path.forEach(function (p) { node[p] = node[p] || {}; node = node[p]; });
+      node['\u0000files'] = (node['\u0000files'] || []).concat(file);
+    });
+    function build(node) {
+      return Object.keys(node).filter(function (k) { return k !== '\u0000files'; }).sort().map(function (k) {
+        var files = (node[k]['\u0000files'] || []).map(function (f) { return '<li class="pdf">' + esc(f) + '</li>'; }).join('');
+        return '<li><span class="folder' + (k.charAt(0) === '_' ? ' review' : '') + '">' + esc(k) + '</span><ul>' + build(node[k]) + files + '</ul></li>';
+      }).join('');
+    }
+    var html = build(root);
+    $('tree').innerHTML = html ? '<li><span class="folder">書類保管(保存先フォルダ)</span><ul>' + html + '</ul></li>'
+      : '<li class="placeholder" style="padding:8px 0">まだ書類がありません</li>';
+  }
+
+  // 顧問先 × 書類種別の保存状況
+  function renderStatus(views) {
+    var types = DOC_TYPE_NAMES.filter(function (t) { return t !== '総勘定元帳' && t !== '請求書'; });
+    var head = '<thead><tr class="names"><th>顧問先</th>' + types.map(function (t) { return '<th>' + esc(t) + '</th>'; }).join('') + '</tr></thead>';
+    var body = CLIENTS.map(function (c) {
+      var cells = types.map(function (t) {
+        var hits = views.filter(function (x) { return x.v && x.v.placed && x.v.clientCode === c.code && x.v.docType === t; })
+          .map(function (x) { return x.v; })
+          .sort(function (a, b) { return a.periodEnd < b.periodEnd ? 1 : -1; });
+        if (!hits.length) return '<td class="none">未保存</td>';
+        return '<td class="has">' + hits.length + '件<small>最新 ' + esc(shortPeriod(hits[0])) + '</small></td>';
+      }).join('');
+      return '<tr><td>' + esc(c.code + ' ' + c.name) + '<br><small style="color:var(--muted)">決算 ' + c.fiscalEndMonth + '月</small></td>' + cells + '</tr>';
+    }).join('');
+    $('status-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+  }
+
+  // ---------- 詳細と手直し ----------
+  async function select(id) {
+    selectedId = id;
+    render();
+    var row = rows.filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+    $('detail-name').textContent = row.name;
+    var v = view(row);
+    if (!v) { $('detail').innerHTML = '<p class="placeholder">' + esc(row.error || '読み取り中です…') + '</p>'; return; }
+    var r = row.r;
+    var issues = v.issues.length ? '<div class="issues"><b>確認が必要な理由</b><ul>' + v.issues.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '';
+
+    var actions = '';
+    if (v.status === '重複の疑い') {
+      actions = '<div class="row-actions"><button type="button" class="primary" data-act="exclude">重複として除外する</button>' +
+        '<button type="button" data-act="keep">別の書類なので残す</button></div>';
+    } else if (v.status === '除外') {
+      actions = '<div class="row-actions"><button type="button" data-act="unexclude">除外を取り消す</button></div>';
+    }
+    var editOpen = v.status === '要確認';
+    var edit = v.status === '除外' || v.status === '重複の疑い' ? '' : editForm(row, v, editOpen);
+
+    $('detail').innerHTML =
+      '<div class="detail-body"><div class="preview" id="preview"><span class="placeholder">表示中…</span></div><div>' +
+      '<dl class="fields">' +
+      '<dt>状態</dt><dd>' + pill(v.status) + (row.fix ? ' <small>人が手直しした値です</small>' : '') + '</dd>' +
+      '<dt>書類種別</dt><dd>' + esc(v.docType || '―') + (r.docTypeHits.length && !row.fix ? ' <small>手がかり:' + esc(r.docTypeHits.join('、')) + '</small>' : '') + '</dd>' +
+      '<dt>顧問先</dt><dd>' + esc((v.clientCode ? v.clientCode + ' ' : '') + (v.clientName || '―')) + (r.clientNameHow && !row.fix ? ' <small>(' + esc(r.clientNameHow) + ')</small>' : '') + '</dd>' +
+      '<dt>対象期間</dt><dd>' + esc(periodText(v) || '―') + (v.term ? ' <small>第' + v.term + '期</small>' : '') + '</dd>' +
+      '<dt>作成日</dt><dd>' + esc(jpDate(v.createdDate) || '―') + '</dd>' +
+      '<dt>金額</dt><dd>' + (v.amount == null ? '―' : esc(v.amountLabel + ' ' + yen(v.amount) + '円')) + '</dd>' +
+      '<dt>新ファイル名</dt><dd>' + esc(v.placed ? v.suggestedFileName : '(確定後に付きます)') + '</dd>' +
+      '<dt>保存先</dt><dd>' + esc(v.placed ? v.suggestedFolder.join(' / ') : v.status === '除外' ? '_重複(削除候補)' : '_要確認(人が確認してから移動)') + '</dd>' +
+      '</dl>' + issues + actions + edit +
+      maskedBlock(row) +
+      '<details class="raw"><summary>PDFから読み取った文字(原文)を見る</summary><pre>' + esc(row.text) + '</pre></details>' +
+      '</div></div>';
+    bindDetail(row);
+    bindMasked(row);
+    drawPreview(row, id);
+  }
+
+  function editForm(row, v, open) {
+    var typeOpts = DOC_TYPE_NAMES.map(function (t) { return '<option' + (t === v.docType ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('');
+    var clientOpts = '<option value="">選んでください</option>' + CLIENTS.map(function (c) {
+      return '<option value="' + c.code + '"' + (c.code === v.clientCode ? ' selected' : '') + '>' + esc(c.code + ' ' + c.name) + '</option>';
+    }).join('');
+    var body =
+      '<div class="edit-grid">' +
+      '<label for="ed-type">書類種別<select id="ed-type"><option value="">選んでください</option>' + typeOpts + '</select></label>' +
+      '<label for="ed-client">顧問先<select id="ed-client">' + clientOpts + '</select></label>' +
+      '<label for="ed-start">対象期間(開始)<input id="ed-start" type="date" value="' + esc(v.periodStart) + '"></label>' +
+      '<label for="ed-end">対象期間(終了)<input id="ed-end" type="date" value="' + esc(v.periodEnd) + '"></label>' +
+      '</div>' +
+      '<div>付く名前:<span class="preview-name" id="ed-name">―</span></div>' +
+      '<div class="btns"><button type="button" class="primary" id="ed-save">この内容で確定して仕分け</button>' +
+      (row.fix ? '<button type="button" id="ed-reset">手直しを取り消す</button>' : '') + '</div>';
+    if (open) return '<div class="edit"><h3>内容を直して確定する</h3>' + body + '</div>';
+    return '<details class="raw"><summary>読み取り結果を手直しする</summary><div class="edit">' + body + '</div></details>';
+  }
+
+  // ---------- 伏せ字版 ----------
+  function maskedOf(row) {
+    var words = $('mask-words') ? $('mask-words').value.split(/[,、\n]/) : [];
+    return PrivacyGuard.mask(row.text, { clients: CLIENTS, words: words, maskAmounts: $('mask-amount') ? $('mask-amount').checked : true });
+  }
+  function maskedHtml(text) {
+    return esc(text).replace(/\[[^\]\n]{1,10}\]/g, function (m) { return '<mark>' + m + '</mark>'; });
+  }
+  function maskedBlock(row) {
+    var m = maskedOf(row);
+    var chips = Object.keys(m.found).map(function (k) { return '<span class="chip">' + esc(k) + ' ' + m.found[k] + '</span>'; }).join('');
+    return '<details class="raw" id="masked-wrap"><summary>AIや外部に相談するときの「伏せ字版」</summary><div class="masked">' +
+      '<p>原文ではなく、この伏せ字版だけを渡してください。伏せた項目は次のとおりです。</p>' +
+      '<div class="chips" id="masked-chips">' + (chips || '<span class="chip">伏せる項目は見つかりませんでした</span>') + '</div>' +
+      '<label for="mask-amount" style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input id="mask-amount" type="checkbox" checked> 金額も伏せる</label>' +
+      '<label for="mask-words" style="font-size:12.5px;display:grid;gap:2px;color:var(--muted)">必ず伏せる言葉(職員名・取引先名など。読点区切り。このページの外には保存されません)' +
+      '<input id="mask-words" type="text" placeholder="例:小野寺、みらい銀行" style="width:100%"></label>' +
+      '<pre id="masked-text">' + maskedHtml(m.text) + '</pre>' +
+      '<p class="warn-line">見出しの無い珍しい名字の人名などは、見つけられないことがあります。渡す前に、必ず目で確認してください。</p>' +
+      '<div class="btns"><button type="button" class="primary" id="btn-copy-masked">伏せ字版をコピー</button></div>' +
+      '</div></details>';
+  }
+  function bindMasked(row) {
+    if (!$('btn-copy-masked')) return;
+    var refresh = function () {
+      var m = maskedOf(row);
+      $('masked-text').innerHTML = maskedHtml(m.text);
+      $('masked-chips').innerHTML = Object.keys(m.found).map(function (k) { return '<span class="chip">' + esc(k) + ' ' + m.found[k] + '</span>'; }).join('');
+    };
+    $('mask-amount').addEventListener('change', refresh);
+    $('mask-words').addEventListener('input', refresh);
+    $('btn-copy-masked').addEventListener('click', function () { copyText(maskedOf(row).text, '伏せ字版をコピーしました'); });
+  }
+
+  function readForm() {
+    var code = $('ed-client').value;
+    var c = clientByCode(code);
+    return { docType: $('ed-type').value, clientCode: code, clientName: c ? c.name : '', periodStart: $('ed-start').value, periodEnd: $('ed-end').value };
+  }
+
+  function bindDetail(row) {
+    document.querySelectorAll('#detail [data-act]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var act = b.getAttribute('data-act');
+        if (act === 'exclude') { row.excluded = true; toast('重複として除外しました(削除候補フォルダへ)'); }
+        if (act === 'unexclude') { row.excluded = false; }
+        if (act === 'keep') { row.dupIgnored = true; toast('別の書類として残しました'); }
+        select(row.id);
+      });
+    });
+    if (!$('ed-save')) return;
+    var update = function () {
+      var f = readForm();
+      $('ed-name').textContent = f.docType && f.clientCode && f.periodEnd
+        ? TaxDocExtractor.suggestNames(f, clientByCode(f.clientCode)).fileName : '書類種別・顧問先・対象期間(終了)を入れてください';
+    };
+    ['ed-type', 'ed-client', 'ed-start', 'ed-end'].forEach(function (id) { $(id).addEventListener('change', update); });
+    update();
+    $('ed-save').addEventListener('click', function () {
+      var f = readForm();
+      if (!f.docType || !f.clientCode || !f.periodEnd) { toast('書類種別・顧問先・対象期間(終了)を入れてください'); return; }
+      if (f.periodStart && f.periodStart > f.periodEnd) { toast('対象期間の開始が、終了より後になっています'); return; }
+      row.fix = f;
+      toast('確定しました。フォルダへ仕分けます');
+      select(row.id);
+    });
+    if ($('ed-reset')) $('ed-reset').addEventListener('click', function () { row.fix = null; select(row.id); });
+  }
+
+  async function drawPreview(row, id) {
+    try {
+      var doc = await pdfjsLib.getDocument({ data: row.data.slice() }).promise;
+      var page = await doc.getPage(1);
+      var vp = page.getViewport({ scale: 1 });
+      var v2 = page.getViewport({ scale: 440 / vp.width });
+      var canvas = document.createElement('canvas');
+      canvas.width = v2.width; canvas.height = v2.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: v2 }).promise;
+      var box = $('preview');
+      if (box && selectedId === id) { box.innerHTML = ''; box.appendChild(canvas); }
+    } catch (e) {
+      var b = $('preview'); if (b) b.innerHTML = '<span class="placeholder">プレビューを表示できません</span>';
+    }
+  }
+
+  // ---------- 効果の試算 ----------
+  var rateTouched = false;
+  function renderCalcRate(views) {
+    // 試算の「自動で仕分けできる割合」は、利用者が触るまではデモの結果を初期値にする
+    if (rateTouched) return calc();
+    var done = views.filter(function (x) { return x.v && x.v.status !== '除外'; });
+    if (done.length) {
+      var auto = done.filter(function (x) { return x.v.status === 'OK'; }).length;
+      $('c-rate').value = Math.round(auto / done.length * 100);
+    }
+    calc();
+  }
+  function calc() {
+    var n = Math.max(0, +$('c-count').value || 0);
+    var m = Math.max(0, +$('c-min').value || 0);
+    var rate = Math.min(100, Math.max(0, +$('c-rate').value || 0)) / 100;
+    var chk = Math.max(0, +$('c-check').value || 0);
+    var before = n * m / 60;
+    var after = n * (1 - rate) * chk / 60;
+    var f1 = function (x) { return (Math.round(x * 10) / 10).toLocaleString('ja-JP'); };
+    $('o-before').textContent = f1(before);
+    $('o-after').textContent = f1(after);
+    $('o-save').textContent = f1(Math.max(0, before - after));
+    $('o-year').textContent = f1(Math.max(0, before - after) * 12);
+  }
+  ['c-count', 'c-min', 'c-check'].forEach(function (id) { $(id).addEventListener('input', calc); });
+  $('c-rate').addEventListener('input', function () { rateTouched = true; calc(); });
+
+  // ---------- コピー ----------
+  function tsv() {
+    var head = ['ステータス', '書類種別', '顧問先コード', '顧問先名', '対象期間(開始)', '対象期間(終了)', '作成日', '金額の項目', '金額', '新ファイル名', '保存先フォルダ', '元のファイル名', '確認メモ'];
+    var lines = rows.map(function (row) { return { row: row, v: view(row) }; }).filter(function (x) { return x.v; }).map(function (x) {
+      var v = x.v;
+      return [v.status, v.docType, v.clientCode, v.clientName, v.periodStart, v.periodEnd, v.createdDate,
+        v.amountLabel, v.amount == null ? '' : v.amount, v.placed ? v.suggestedFileName : '',
+        v.placed ? v.suggestedFolder.join('/') : (v.status === '除外' ? '_重複(削除候補)' : '_要確認'), x.row.name, v.issues.join(' / ')]
+        .map(function (val) { return String(val).replace(/[\t\n]/g, ' '); }).join('\t');
+    });
+    return [head.join('\t')].concat(lines).join('\n');
+  }
+
+  // ---------- イベント ----------
+  $('rows').addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-id]');
+    if (tr) select(+tr.getAttribute('data-id'));
+  });
+  ['f-client', 'f-type', 'f-status'].forEach(function (id) { $(id).addEventListener('change', render); });
+  $('f-text').addEventListener('input', render);
+
+  function showTab(which) {
+    var list = which === 'list';
+    $('tab-list').setAttribute('aria-selected', String(list));
+    $('tab-status').setAttribute('aria-selected', String(!list));
+    $('view-list').hidden = !list;
+    $('view-status').hidden = list;
+  }
+  $('tab-list').addEventListener('click', function () { showTab('list'); });
+  $('tab-status').addEventListener('click', function () { showTab('status'); });
+
+  async function addFiles(files) {
+    for (var i = 0; i < files.length; i++) {
+      var row = await addPdf(files[i].name, await files[i].arrayBuffer(), false);
+      if (i === 0) select(row.id);
+    }
+  }
+  $('file').addEventListener('change', async function (e) {
+    await addFiles(Array.prototype.slice.call(e.target.files || []));
+    e.target.value = '';
+  });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) {
+    var files = Array.prototype.slice.call(e.dataTransfer.files || []).filter(function (f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
+    if (!files.length) { toast('PDFファイルを入れてください'); return; }
+    addFiles(files);
+  });
+  $('btn-sample').addEventListener('click', loadSamples);
+  $('btn-clear').addEventListener('click', function () {
+    rows = []; selectedId = null; render();
+    $('detail').innerHTML = '<p class="placeholder">表の行を選ぶと、読み取りの根拠を表示します。</p>';
+    $('detail-name').textContent = '';
+  });
+  $('use-master').addEventListener('change', function () {
+    rows.forEach(function (row) { if (row.text) analyze(row); });
+    if (selectedId !== null) select(selectedId); else render();
+  });
+  function copyText(text, okMsg) {
+    var fallback = function () {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast(okMsg); }
+      catch (e) { toast('コピーできませんでした'); }
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
+    } else { fallback(); }
+  }
+  $('btn-copy').addEventListener('click', function () { copyText(tsv(), 'コピーしました。スプレッドシートに貼り付けできます'); });
+
+  // ---------- このページの通信を数える ----------
+  var PLATFORM = /(^|\.)(claude\.ai|claudeusercontent\.com|anthropic\.com)$/;
+  function renderNet() {
+    if (!window.performance || !performance.getEntriesByType) return;
+    var sends = 0, loads = {};
+    performance.getEntriesByType('resource').forEach(function (e) {
+      var u;
+      try { u = new URL(e.name, location.href); } catch (x) { return; }
+      if (u.origin === location.origin || u.protocol === 'data:' || u.protocol === 'blob:' || PLATFORM.test(u.hostname)) return;
+      if (['fetch', 'xmlhttprequest', 'beacon'].indexOf(e.initiatorType) >= 0) sends++;
+      else loads[u.hostname] = (loads[u.hostname] || 0) + 1;
+    });
+    var label = { 'cdnjs.cloudflare.com': 'PDFを表示・読み取る部品', 'fonts.googleapis.com': '文字の形(フォント)の設定', 'fonts.gstatic.com': '文字の形(フォント)' };
+    var hosts = Object.keys(loads);
+    $('net-send').textContent = sends;
+    $('net-send').className = sends ? 'bad' : '';
+    $('net-load').textContent = hosts.reduce(function (a, h) { return a + loads[h]; }, 0);
+    $('net-list').innerHTML = hosts.map(function (h) { return '<li>' + esc(h) + '(' + esc(label[h] || 'その他') + ')' + loads[h] + '件</li>'; }).join('');
+  }
+  try {
+    new PerformanceObserver(renderNet).observe({ type: 'resource', buffered: true });
+  } catch (e) { /* 古いブラウザでは表示だけ省略 */ }
+  renderNet();
+
+  render();
+  loadSamples(); // 開いた時点でサンプルを読み取った状態にする
+})();
+</script>
+
+</body>
+</html>

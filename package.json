@@ -1,0 +1,15 @@
+{
+  "name": "pdf-spreadsheet-sorter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "税理士事務所のPDF書類を読み取り、スプレッドシートに整理するデモ",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "samples": "python3 scripts/generate_samples.py",
+    "test": "node scripts/build.js && node --test test/*.test.js",
+    "local": "node local/sorter.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "3.11.174"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "inbox": "../work/受付",
+  "archive": "../work/書類保管",
+  "clients": "顧問先マスタ.sample.csv",
+  "ai": {
+    "mode": "fallback",
+    "url": "http://127.0.0.1:11434",
+    "model": "qwen3:8b",
+    "timeoutSec": 180
+  }
+}
