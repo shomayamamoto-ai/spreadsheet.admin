@@ -192,6 +192,16 @@ function createServer(configPath) {
       const url = new URL(req.url, 'http://127.0.0.1');
 
       if (req.method === 'GET' && url.pathname === '/') return send(200, ui, 'text/html; charset=utf-8');
+      // 字体(このパソコンにインストールした LINE Seed JP / IBM Plex Mono)を配る
+      const fm = /^\/fonts\/(line-seed-jp|ibm-plex-mono)\/((?:\d{3}\.css)|(?:files\/[a-z0-9-]+\.woff2?))$/.exec(url.pathname);
+      if (req.method === 'GET' && fm) {
+        const file = path.join(path.dirname(require.resolve('@fontsource/' + fm[1] + '/package.json')), fm[2]);
+        if (!fs.existsSync(file)) return send(404, { error: '見つかりません' });
+        const type = file.endsWith('.css') ? 'text/css; charset=utf-8' : file.endsWith('.woff2') ? 'font/woff2' : 'font/woff';
+        res.setHeader('Cache-Control', 'max-age=86400');
+        res.writeHead(200, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff' });
+        return res.end(fs.readFileSync(file));
+      }
       if (req.method === 'GET' && url.pathname === '/api/status') return send(200, await status());
       if (req.method === 'GET' && url.pathname === '/api/review') return send(200, { items: await reviewItems() });
       if (req.method === 'GET' && url.pathname === '/api/settings') return send(200, ST.getSettings(configPath));

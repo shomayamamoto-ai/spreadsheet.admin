@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LINE+Seed+JP:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: 帳簿の緑罫を背景に、縦一列で「課題→仕組み→守り方→効果→導入」と読み進める提案書型のサイト */
 :root {
@@ -18,9 +18,9 @@
   --warn: #8f5200;
   --warn-soft: #fff0d9;
   --code-bg: #eaf1ed;
-  --font-body: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
-  --font-display: "BIZ UDPMincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-body: "LINE Seed JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+  --font-display: "LINE Seed JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+  --font-mono: "IBM Plex Mono", "LINE Seed JP", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -42,7 +42,8 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 15px;
-  line-height: 1.85;
+  line-height: 1.9;
+  letter-spacing: 0.03em;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 0 56px;
@@ -50,8 +51,8 @@ body {
 .wrap { max-width: 1040px; margin: 0 auto; }
 a { color: var(--accent); }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-h1, h2, h3 { text-wrap: balance; }
-h2 { font-family: var(--font-display); font-size: 26px; line-height: 1.45; margin: 0 0 6px; letter-spacing: 0.02em; }
+h1, h2, h3 { text-wrap: balance; font-feature-settings: "palt"; }
+h2 { font-family: var(--font-display); font-weight: 800; font-size: 28px; line-height: 1.45; margin: 0 0 8px; letter-spacing: 0.04em; }
 h3 { font-size: 16px; margin: 0; }
 .lead { color: var(--muted); margin: 0 0 22px; max-width: 64ch; }
 .mark { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 3px; white-space: nowrap; vertical-align: 1px; }
@@ -60,14 +61,16 @@ h3 { font-size: 16px; margin: 0; }
 
 /* ---------- 上部の帯 ---------- */
 .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding-block: 18px; border-bottom: 1px solid var(--rule); }
-.brand { font-weight: 700; letter-spacing: 0.04em; }
+.brand { font-weight: 800; letter-spacing: 0.04em; display: inline-flex; align-items: center; gap: 10px; font-feature-settings: "palt"; }
+.brand::before { content: ""; width: 18px; height: 14px; border: 2px solid var(--accent); border-radius: 2px; background: linear-gradient(var(--accent), var(--accent)) 0 50% / 100% 2px no-repeat; }
+.eyebrow { display: inline-block; font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; margin-bottom: 14px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); }
 .topnav { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; }
 .topnav a { color: var(--muted); text-decoration: none; }
 .topnav a:hover { color: var(--accent); }
 
 /* ---------- 冒頭 ---------- */
 .hero { padding-block: 44px 36px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 36px; align-items: center; }
-.hero h1 { font-family: var(--font-display); font-size: 38px; line-height: 1.4; margin: 0 0 14px; letter-spacing: 0.02em; }
+.hero h1 { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1.38; margin: 0 0 18px; letter-spacing: 0.04em; }
 .hero p { margin: 0 0 22px; color: var(--muted); max-width: 34em; }
 .cta { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14.5px; font-weight: 700; padding: 10px 18px; border-radius: 4px; text-decoration: none; border: 1px solid var(--accent); }
@@ -133,7 +136,7 @@ td.yes { color: var(--accent); font-weight: 700; }
 .calc-out { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .calc-out div { border-left: 3px solid var(--accent); padding: 4px 12px; }
 .calc-out em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); }
-.calc-out strong { font-family: var(--font-display); font-size: 30px; font-variant-numeric: tabular-nums; }
+.calc-out strong { font-family: var(--font-mono); font-weight: 500; font-size: 30px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .calc-out small { font-size: 13px; margin-left: 2px; }
 .calc-note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
 
@@ -189,6 +192,7 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
 
   <header class="hero">
     <div>
+      <span class="eyebrow">会計事務所・税理士事務所向け</span>
       <h1>放り込んだ書類PDFを、<br>事務所の外に出さずに<br>自動で仕分けます。</h1>
       <p>会計ソフトで作った試算表や申告書のPDFを読み取り、顧問先・年度・書類種別ごとにフォルダへ整理して、一覧表に記録します。読み取りに使うAIは、事務所のパソコンの中だけで動きます。</p>
       <div class="cta">

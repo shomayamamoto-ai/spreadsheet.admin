@@ -4,14 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PDF仕分けアシスタント(ローカル版)</title>
+<!-- 字体はこのパソコンの中から読み込む(インターネットに接続しない) -->
+<link rel="stylesheet" href="/fonts/line-seed-jp/400.css">
+<link rel="stylesheet" href="/fonts/line-seed-jp/700.css">
+<link rel="stylesheet" href="/fonts/line-seed-jp/800.css">
+<link rel="stylesheet" href="/fonts/ibm-plex-mono/400.css">
 <style>
 /* 外部の部品(フォントなど)を読み込まない。インターネットなしで動く */
 :root {
   --paper: #f4f7f5; --surface: #ffffff; --ink: #1c2923; --muted: #56675e;
   --rule: #cddbd3; --rule-strong: #9fbcae; --accent: #1d6a50; --accent-ink: #ffffff;
   --accent-soft: #e2efe8; --warn: #8f5200; --warn-soft: #fff0d9; --err: #b3261e; --err-soft: #fde7e9; --head: #eaf1ed;
-  --font: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui, sans-serif;
-  --mono: ui-monospace, Consolas, Menlo, monospace;
+  --font: "LINE Seed JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+  --mono: "IBM Plex Mono", "LINE Seed JP", ui-monospace, Consolas, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -25,7 +30,7 @@
 body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.7 var(--font); padding: 0 16px 48px; }
 .wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
 header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 16px; padding: 22px 0 14px; border-bottom: 2px solid var(--accent); }
-h1 { margin: 0; font-size: 22px; letter-spacing: .03em; }
+h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .04em; font-feature-settings: "palt"; }
 .local-badge { font-size: 12px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 2px 10px; }
 .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
 .panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
@@ -75,7 +80,7 @@ td.nowrap { white-space: nowrap; }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
 .office { font-size: 13px; color: var(--muted); margin-top: 2px; }
-.tabs { display: flex; gap: 6px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .tab { font-weight: 700; }
 .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .banner { background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 10px 14px; }

@@ -12,6 +12,8 @@
     "evaluate": "node local/evaluate.js"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/line-seed-jp": "^5.3.2",
     "pdfjs-dist": "3.11.174"
   }
 }

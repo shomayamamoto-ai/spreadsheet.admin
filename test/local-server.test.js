@@ -54,6 +54,17 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
     assert.ok(!/https?:\/\//.test(page.text.replace(/http:\/\/127\.0\.0\.1/g, '')), '画面が外部のURLを含んでいます');
     assert.match(page.headers['content-security-policy'], /connect-src 'self'/);
 
+    // 字体はこのパソコンから配る(フォントのフォルダ以外は読めない)
+    const css = await request(port, 'GET', '/fonts/line-seed-jp/400.css');
+    assert.strictEqual(css.status, 200);
+    assert.match(css.text, /LINE Seed JP/);
+    const woff = await request(port, 'GET', '/fonts/line-seed-jp/' + /url\(\.\/(files\/[^)]+\.woff2)\)/.exec(css.text)[1]);
+    assert.strictEqual(woff.status, 200);
+    assert.strictEqual(woff.headers['content-type'], 'font/woff2');
+    for (const bad of ['/fonts/line-seed-jp/../../../package.json', '/fonts/line-seed-jp/package.json', '/fonts/other/400.css', '/fonts/line-seed-jp/files/../LICENSE']) {
+      assert.notStrictEqual((await request(port, 'GET', bad)).status, 200, bad);
+    }
+
     // localhost 以外のアドレスや、合言葉の無い操作は拒否
     assert.strictEqual((await request(port, 'GET', '/api/status', { host: 'evil.example.com' })).status, 403);
     assert.strictEqual((await request(port, 'POST', '/api/run', { body: { apply: true } })).status, 403);
