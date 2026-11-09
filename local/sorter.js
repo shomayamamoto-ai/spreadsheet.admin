@@ -96,6 +96,35 @@ function moveFile(from, to) {
   }
 }
 
+// 一覧(書類一覧.csv)に行を追記する
+// Excel・Googleスプレッドシートで文字化けしないよう、新規作成時は BOM を付ける
+function appendLog(archive, rows) {
+  fs.mkdirSync(archive, { recursive: true });
+  const logFile = path.join(archive, LOG_NAME);
+  const isNew = !fs.existsSync(logFile);
+  fs.appendFileSync(logFile, (isNew ? '\uFEFF' + toCsvLine(HEADERS) + '\n' : '') + rows.map(toCsvLine).join('\n') + '\n');
+}
+
+function nowText() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// 設定ファイルを読み、フォルダの場所などをそろえる
+function loadConfig(configPath) {
+  const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const baseDir = path.dirname(path.resolve(configPath));
+  const abs = (p) => path.resolve(baseDir, p);
+  return {
+    inbox: abs(cfg.inbox),
+    archive: abs(cfg.archive),
+    clientsFile: cfg.clients ? abs(cfg.clients) : '',
+    ai: Object.assign({ mode: 'fallback', url: 'http://127.0.0.1:11434', model: 'qwen3:8b' }, cfg.ai || {}),
+    autoRunMinutes: cfg.autoRunMinutes || 0
+  };
+}
+
 // ---------------- 1件の処理(テストからも呼べる) ----------------
 async function analyze(text, ctx) {
   const rule = X.extract(text, { clients: ctx.clients });
@@ -113,11 +142,9 @@ async function analyze(text, ctx) {
 
 async function run(opts) {
   lockdownNetwork(); // ここから先、このパソコン以外とは通信できない
-  const cfg = JSON.parse(fs.readFileSync(opts.config, 'utf8'));
-  const baseDir = path.dirname(path.resolve(opts.config));
-  const abs = (p) => path.resolve(baseDir, p);
-  const inbox = abs(cfg.inbox), archive = abs(cfg.archive);
-  const ctx = { clients: loadClients(cfg.clients ? abs(cfg.clients) : ''), ai: Object.assign({ mode: 'fallback', url: 'http://127.0.0.1:11434', model: 'qwen3:8b' }, cfg.ai || {}) };
+  const cfg = loadConfig(opts.config);
+  const inbox = cfg.inbox, archive = cfg.archive;
+  const ctx = { clients: loadClients(cfg.clientsFile), ai: cfg.ai };
   const log = opts.log || console.log;
 
   if (ctx.ai.mode !== 'off') {
@@ -148,38 +175,33 @@ async function run(opts) {
       r = { status: 'エラー', method: '', issues: ['PDFを読めませんでした:' + e.message], aiFilled: [], suggestedFolder: [], suggestedFileName: '' };
     }
     const key = r.status === 'OK' ? X.docKey(r) : '';
-    if (key && known[key]) { r.status = '重複の疑い'; r.issues.push(`同じ書類が ${known[key]} にあります`); }
+    if (key && known[key]) { r.status = '重複の疑い'; r.issues.push(`同じ書類がすでにあります(${known[key]})`); }
 
     let dest, destDir;
     if (r.status === 'OK') {
       destDir = path.join(archive, ...r.suggestedFolder);
       dest = uniquePath(destDir, r.suggestedFileName);
-      known[key] = '今回の処理';
+      known[key] = `今回の処理で先に仕分けた ${f}`;
     } else {
       destDir = path.join(archive, REVIEW);
       dest = uniquePath(destDir, f);
     }
     if (opts.apply) moveFile(src, dest);
-    const row = [new Date().toISOString().replace('T', ' ').slice(0, 19), r.status, r.method, r.docType || '', r.clientCode || '', r.clientName || '',
+    const row = [nowText(), r.status, r.method, r.docType || '', r.clientCode || '', r.clientName || '',
       r.periodStart || '', r.periodEnd || '', r.createdDate || '', r.amountLabel || '', r.amount == null ? '' : r.amount,
-      r.status === 'OK' ? path.basename(dest) : '', path.relative(archive, destDir) || '.', f, (r.aiFilled || []).join('・'), (r.issues || []).join(' / ')];
+      path.basename(dest), path.relative(archive, destDir) || '.', f, (r.aiFilled || []).join('・'), (r.issues || []).join(' / ')];
     rows.push(row);
     log(`${opts.apply ? '移動' : '予定'}:${f} → ${path.relative(archive, dest)}  [${r.status}${r.aiFilled && r.aiFilled.length ? '・AIで補った項目:' + r.aiFilled.join('、') : ''}]`);
   }
 
-  if (opts.apply && rows.length) {
-    fs.mkdirSync(archive, { recursive: true });
-    const isNew = !fs.existsSync(logFile);
-    // Excel・Googleスプレッドシートで文字化けしないよう、新規作成時は BOM を付ける
-    fs.appendFileSync(logFile, (isNew ? '﻿' + toCsvLine(HEADERS) + '\n' : '') + rows.map(toCsvLine).join('\n') + '\n');
-  }
+  if (opts.apply && rows.length) appendLog(archive, rows);
   const count = (s) => rows.filter((r) => r[1] === s).length;
   log(`\n合計 ${rows.length} 件(OK ${count('OK')} / 要確認 ${count('要確認')} / 重複の疑い ${count('重複の疑い')} / エラー ${count('エラー')})`);
   if (!opts.apply && rows.length) log('※ 試し実行です。ファイルは動かしていません。本番は --apply を付けて実行してください。');
   return { rows, headers: HEADERS };
 }
 
-module.exports = { run, analyze, parseCsv, loadClients };
+module.exports = { run, analyze, parseCsv, toCsvLine, loadClients, loadConfig, loadKnownKeys, appendLog, moveFile, uniquePath, nowText, HEADERS, LOG_NAME, REVIEW };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

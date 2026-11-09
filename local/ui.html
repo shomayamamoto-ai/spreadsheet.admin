@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF仕分けアシスタント(ローカル版)</title>
+<style>
+/* 外部の部品(フォントなど)を読み込まない。インターネットなしで動く */
+:root {
+  --paper: #f4f7f5; --surface: #ffffff; --ink: #1c2923; --muted: #56675e;
+  --rule: #cddbd3; --rule-strong: #9fbcae; --accent: #1d6a50; --accent-ink: #ffffff;
+  --accent-soft: #e2efe8; --warn: #8f5200; --warn-soft: #fff0d9; --err: #b3261e; --err-soft: #fde7e9; --head: #eaf1ed;
+  --font: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  --mono: ui-monospace, Consolas, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3; --rule: #2b3a33; --rule-strong: #3f574b;
+    --accent: #62c39a; --accent-ink: #0d1a14; --accent-soft: #1b3228; --warn: #f2b65c; --warn-soft: #3a2a12;
+    --err: #f28b82; --err-soft: #3b1d1b; --head: #1e2a24; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.7 var(--font); padding: 0 16px 48px; }
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 16px; padding: 22px 0 14px; border-bottom: 2px solid var(--accent); }
+h1 { margin: 0; font-size: 22px; letter-spacing: .03em; }
+.local-badge { font-size: 12px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 2px 10px; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.panel-head h2 { margin: 0; font-size: 15px; }
+.hint { color: var(--muted); font-size: 12.5px; }
+.status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+.status > div { padding: 10px 14px; border-right: 1px solid var(--rule); min-width: 0; }
+.status > div:last-child { border-right: 0; }
+.status em { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
+.status strong { font-size: 15px; }
+.status small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ok-text { color: var(--accent); } .ng-text { color: var(--warn); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px 14px; }
+button { font: inherit; font-size: 13.5px; cursor: pointer; border-radius: 4px; padding: 7px 14px; border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+button.danger { border-color: var(--warn); color: var(--warn); }
+button:disabled { opacity: .5; cursor: wait; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select, input { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 5px 8px; max-width: 100%; }
+.confirm-run { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 6px 10px; }
+.msg { margin: 0 14px 12px; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
+.msg.ok { background: var(--accent-soft); color: var(--accent); }
+.msg.err { background: var(--err-soft); color: var(--err); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--rule); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--head); font-weight: 700; white-space: nowrap; }
+td.file { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+td.nowrap { white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.err { background: var(--err-soft); color: var(--err); }
+.ai-tag { font-size: 11.5px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+.empty { color: var(--muted); padding: 18px 14px; margin: 0; }
+.review { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); min-height: 420px; }
+.review-list { border-right: 1px solid var(--rule); margin: 0; padding: 6px; list-style: none; display: grid; gap: 4px; align-content: start; }
+.review-list button { width: 100%; text-align: left; display: grid; gap: 2px; border-color: transparent; }
+.review-list button[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.review-list small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.review-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 14px; padding: 12px; min-width: 0; }
+.review-body iframe { width: 100%; height: 560px; border: 1px solid var(--rule); border-radius: 2px; background: #fff; }
+.form { display: grid; gap: 10px; align-content: start; }
+.form label { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
+.memo { background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 8px 10px; font-size: 12.5px; }
+.preview-name { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
+@media (max-width: 900px) {
+  .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .status > div:nth-child(2) { border-right: 0; }
+  .review, .review-body { grid-template-columns: minmax(0, 1fr); }
+  .review-list { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .review-body iframe { height: 420px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>PDF仕分けアシスタント(ローカル版)</h1>
+    <span class="local-badge">このパソコンの中だけで動作しています</span>
+  </header>
+
+  <section class="panel" aria-label="状態">
+    <div class="status">
+      <div><em>受付フォルダ</em><strong id="st-inbox">―</strong><small id="st-inbox-path"></small></div>
+      <div><em>保存先フォルダ</em><strong>書類保管</strong><small id="st-archive"></small></div>
+      <div><em>ローカルAI</em><strong id="st-ai">確認中…</strong><small id="st-ai-note"></small></div>
+      <div><em>顧問先マスタ</em><strong id="st-clients">―</strong><small>顧問先マスタのCSVから読み込み</small></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="run-title">
+    <div class="panel-head"><h2 id="run-title">仕分けの実行</h2><span class="hint">まず「試し実行」で予定を確認してから、「仕分けを実行」してください</span></div>
+    <div class="actions">
+      <button id="btn-dry" type="button">試し実行(ファイルは動かしません)</button>
+      <button id="btn-apply" type="button" class="primary">仕分けを実行</button>
+      <span class="confirm-run" id="confirm-run" hidden>受付フォルダのPDFを移動します。よろしいですか?
+        <button id="btn-apply-yes" type="button" class="primary">実行する</button>
+        <button id="btn-apply-no" type="button">やめる</button></span>
+      <label for="auto" class="hint">自動実行(この画面を開いている間)
+        <select id="auto"><option value="0">しない</option><option value="15">15分ごと</option><option value="30">30分ごと</option><option value="60">60分ごと</option></select></label>
+      <span class="hint" id="auto-note"></span>
+    </div>
+    <p class="msg" id="run-msg" hidden></p>
+    <div id="result"><p class="empty">まだ実行していません。</p></div>
+  </section>
+
+  <section class="panel" aria-labelledby="review-title">
+    <div class="panel-head"><h2 id="review-title">要確認の書類</h2><span class="hint">PDFを見ながら内容を選び、「確定」すると正しいフォルダへ移動します</span></div>
+    <p class="msg" id="review-msg" hidden></p>
+    <div id="review"><p class="empty">要確認の書類はありません。</p></div>
+  </section>
+
+  <footer>
+    ・PDFの読み取り、AIでの補完、ファイルの移動は、すべてこのパソコンの中で行います。外部への送信はしません。<br>
+    ・AIの答えは、根拠の文章がPDFに書かれているかを確かめてから使います。確かめられないものは「要確認」になります。<br>
+    ・この画面は、黒い画面(起動したウィンドウ)を閉じると終了します。
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var TOKEN = '__TOKEN__';
+  var $ = function (id) { return document.getElementById(id); };
+  var info = { clients: [], docTypes: [] };
+  var reviewItems = [], current = null, forceFile = null;
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function api(method, url, body) {
+    return fetch(url, {
+      method: method,
+      headers: method === 'POST' ? { 'Content-Type': 'application/json', 'X-App-Token': TOKEN } : {},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error(data.error || 'エラーが起きました');
+        return data;
+      });
+    });
+  }
+  function msg(id, text, ok) {
+    var el = $(id);
+    el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); el.hidden = !text;
+  }
+  function pill(s) {
+    var cls = s === 'OK' || s === '確定済み' ? 'ok' : s === 'エラー' ? 'err' : 'warn';
+    return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+  }
+  // 期間を「2025年3月分」「2025年3月期」「2024年分」の形で表示する
+  function period(a, b, docType) {
+    if (!b) return '―';
+    var kind = (info.docTypeKinds || {})[docType];
+    if (kind === 'year') return b.slice(0, 4) + '年分';
+    if (a && a.slice(0, 7) === b.slice(0, 7)) return b.slice(0, 4) + '年' + (+b.slice(5, 7)) + '月分';
+    if (kind === 'fiscal') return b.slice(0, 4) + '年' + (+b.slice(5, 7)) + '月期';
+    return (a || '') + '〜' + b;
+  }
+
+  // ---------- 状態 ----------
+  function loadStatus() {
+    return api('GET', '/api/status').then(function (s) {
+      info = s;
+      $('st-inbox').textContent = s.inboxCount == null ? 'フォルダが見つかりません' : 'PDF ' + s.inboxCount + ' 件';
+      $('st-inbox').className = s.inboxCount == null ? 'ng-text' : '';
+      $('st-inbox-path').textContent = s.inbox;
+      $('st-archive').textContent = s.archive;
+      $('st-ai').textContent = s.ai.ok ? '使えます' : (s.ai.mode === 'off' ? '使わない設定' : '使えません');
+      $('st-ai').className = s.ai.ok ? 'ok-text' : 'ng-text';
+      $('st-ai-note').textContent = s.ai.ok ? 'モデル:' + s.ai.model + '(迷った書類だけに使用)' : s.ai.reason + '(ルールだけで判定します)';
+      $('st-clients').textContent = s.clients.length + ' 社';
+      $('auto').value = String(s.autoRunMinutes || 0);
+      $('auto-note').textContent = s.nextRunAt ? '次の実行:' + new Date(s.nextRunAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '';
+      if (s.last) renderResult(s.last);
+    }).catch(function (e) { msg('run-msg', e.message, false); });
+  }
+
+  // ---------- 実行 ----------
+  function renderResult(r) {
+    var h = r.headers, idx = function (n) { return h.indexOf(n); };
+    if (!r.rows.length) { $('result').innerHTML = '<p class="empty">受付フォルダにPDFはありませんでした。(' + esc(r.at) + ')</p>'; return; }
+    var rows = r.rows.map(function (x) {
+      var ai = x[idx('AIで補った項目')];
+      return '<tr><td>' + pill(x[idx('ステータス')]) + '</td><td>' + esc(x[idx('書類種別')] || '―') + '</td>' +
+        '<td>' + esc((x[idx('顧問先コード')] ? x[idx('顧問先コード')] + ' ' : '') + (x[idx('顧問先名')] || '―')) + '</td>' +
+        '<td class="nowrap">' + esc(period(x[idx('対象期間(開始)')], x[idx('対象期間(終了)')], x[idx('書類種別')])) + '</td>' +
+        '<td class="file">' + esc(x[idx('保存先フォルダ')] + ' / ' + x[idx('新ファイル名')]) + '</td>' +
+        '<td>' + (ai ? '<span class="ai-tag">AIで補完:' + esc(ai) + '</span>' : '') + '</td>' +
+        '<td>' + esc(x[idx('確認メモ')]) + '</td><td class="file nowrap">' + esc(x[idx('元のファイル名')]) + '</td></tr>';
+    }).join('');
+    $('result').innerHTML = '<p class="empty" style="padding:8px 14px">' + (r.apply ? '仕分けを実行しました' : '試し実行の結果です(ファイルは動かしていません)') + '(' + esc(r.at) + ')</p>' +
+      '<div class="scroll"><table><thead><tr><th>ステータス</th><th>書類種別</th><th>顧問先</th><th>対象期間</th><th>保存先</th><th>AI</th><th>確認メモ</th><th>元のファイル名</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function setBusy(b) { ['btn-dry', 'btn-apply', 'btn-apply-yes'].forEach(function (id) { $(id).disabled = b; }); }
+
+  function runSort(apply) {
+    setBusy(true);
+    msg('run-msg', apply ? '仕分けています…(AIを使う書類があると、1件に数十秒かかることがあります)' : '試し実行しています…', true);
+    api('POST', '/api/run', { apply: apply }).then(function (r) {
+      renderResult(r);
+      var count = function (s) { return r.rows.filter(function (x) { return x[1] === s; }).length; };
+      msg('run-msg', (apply ? '仕分けました。' : '試し実行しました。') + 'OK ' + count('OK') + ' 件/要確認 ' + count('要確認') + ' 件/重複の疑い ' + count('重複の疑い') + ' 件', true);
+      return Promise.all([loadStatus(), loadReview()]);
+    }).catch(function (e) { msg('run-msg', e.message, false); }).then(function () { setBusy(false); });
+  }
+
+  $('btn-dry').addEventListener('click', function () { runSort(false); });
+  $('btn-apply').addEventListener('click', function () { $('confirm-run').hidden = false; });
+  $('btn-apply-no').addEventListener('click', function () { $('confirm-run').hidden = true; });
+  $('btn-apply-yes').addEventListener('click', function () { $('confirm-run').hidden = true; runSort(true); });
+  $('auto').addEventListener('change', function () {
+    api('POST', '/api/auto', { minutes: +$('auto').value }).then(loadStatus).catch(function (e) { msg('run-msg', e.message, false); });
+  });
+
+  // ---------- 要確認 ----------
+  function loadReview() {
+    return api('GET', '/api/review').then(function (r) {
+      reviewItems = r.items;
+      if (!reviewItems.length) { $('review').innerHTML = '<p class="empty">要確認の書類はありません。</p>'; current = null; return; }
+      if (!current || !reviewItems.some(function (x) { return x.file === current; })) current = reviewItems[0].file;
+      renderReview();
+    }).catch(function (e) { msg('review-msg', e.message, false); });
+  }
+
+  function options(list, value, label) {
+    return '<option value="">選んでください</option>' + list.map(function (o) {
+      var v = typeof o === 'string' ? o : o.code;
+      var t = typeof o === 'string' ? o : o.code + ' ' + o.name;
+      return '<option value="' + esc(v) + '"' + (v === value ? ' selected' : '') + '>' + esc(t) + '</option>';
+    }).join('');
+  }
+
+  function renderReview() {
+    var it = reviewItems.filter(function (x) { return x.file === current; })[0];
+    var list = reviewItems.map(function (x) {
+      return '<li><button type="button" data-file="' + esc(x.file) + '" aria-current="' + (x.file === current) + '">' +
+        '<span>' + pill(x.status) + ' ' + esc(x.originalName) + '</span><small>' + esc(x.memo || '確認が必要です') + '</small></button></li>';
+    }).join('');
+    $('review').innerHTML = '<div class="review"><ul class="review-list">' + list + '</ul><div class="review-body">' +
+      '<iframe title="PDFの中身" src="/api/pdf?file=' + encodeURIComponent(it.file) + '"></iframe>' +
+      '<div class="form">' +
+      (it.memo ? '<div class="memo">' + esc(it.memo) + '</div>' : '') +
+      '<label for="f-type">書類種別<select id="f-type">' + options(info.docTypes, it.docType) + '</select></label>' +
+      '<label for="f-client">顧問先<select id="f-client">' + options(info.clients, it.clientCode) + '</select></label>' +
+      '<label for="f-start">対象期間(開始)<input id="f-start" type="date" value="' + esc(it.periodStart) + '"></label>' +
+      '<label for="f-end">対象期間(終了)<input id="f-end" type="date" value="' + esc(it.periodEnd) + '"></label>' +
+      '<div class="btns"><button type="button" class="primary" id="btn-confirm">確定して仕分ける</button>' +
+      '<button type="button" class="danger" id="btn-exclude">重複・不要として除外</button></div>' +
+      '<p class="hint" style="margin:0">「除外」は削除ではなく、「_重複(削除候補)」フォルダへ移すだけです。</p>' +
+      '</div></div></div>';
+    document.querySelectorAll('.review-list button').forEach(function (b) {
+      b.addEventListener('click', function () { current = b.getAttribute('data-file'); forceFile = null; msg('review-msg', '', true); renderReview(); });
+    });
+    $('btn-confirm').addEventListener('click', function () {
+      var body = { file: it.file, docType: $('f-type').value, clientCode: $('f-client').value, periodStart: $('f-start').value, periodEnd: $('f-end').value, force: forceFile === it.file };
+      api('POST', '/api/confirm', body).then(function (r) {
+        if (r.needsForce) { forceFile = it.file; msg('review-msg', r.message, false); return; }
+        forceFile = null;
+        msg('review-msg', r.message, true);
+        return loadReview();
+      }).catch(function (e) { msg('review-msg', e.message, false); });
+    });
+    $('btn-exclude').addEventListener('click', function () {
+      api('POST', '/api/exclude', { file: it.file }).then(function (r) { msg('review-msg', r.message, true); return loadReview(); })
+        .catch(function (e) { msg('review-msg', e.message, false); });
+    });
+  }
+
+  loadStatus();
+  loadReview();
+  setInterval(loadStatus, 60000);
+})();
+</script>
+</body>
+</html>
