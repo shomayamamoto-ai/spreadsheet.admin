@@ -21,7 +21,7 @@ test('サンプル9件の精度を測る(ファイルは動かさない)', async
   const folder = path.join(ROOT, 'demo', 'samples');
   const before = fs.readdirSync(folder).join();
   const lines = [];
-  const { results, outFile } = await evaluate({ config: path.join(dir, 'config.json'), folder, answers: path.join(dir, 'answers.csv'), log: (m) => lines.push(m) });
+  const { results, outFile, htmlFile } = await evaluate({ config: path.join(dir, 'config.json'), folder, answers: path.join(dir, 'answers.csv'), log: (m) => lines.push(m) });
   const s = results['ルールのみ'].summary;
   assert.strictEqual(s.total, 9);
   assert.strictEqual(s.auto, 8);
@@ -30,6 +30,9 @@ test('サンプル9件の精度を測る(ファイルは動かさない)', async
   assert.strictEqual(s.fieldAcc['書類種別'], '8/8(100%)');
   assert.strictEqual(fs.readdirSync(folder).join(), before, 'PDFが動いています');
   const csv = fs.readFileSync(outFile, 'utf8');
+  const html = fs.readFileSync(htmlFile, 'utf8');
+  assert.match(html, /精度レポート/);
+  assert.match(html, /誤って自動で仕分けた書類はありませんでした/);
   assert.ok(csv.startsWith('﻿方式'));
   assert.match(csv, /要確認\(人が確認\)/);
 });

@@ -142,9 +142,13 @@ async function evaluate(opts) {
   }
   fs.writeFileSync(outFile, '﻿' + lines.join('\n') + '\n');
   log(`\n明細を保存しました:${outFile}`);
+  // 顧客に見せられる形の「精度レポート」(HTML)も作る
+  const htmlFile = path.join(path.dirname(path.resolve(opts.answers)), '精度レポート.html');
+  fs.writeFileSync(htmlFile, require('./report.js').accuracyReport(results, { office: cfg.office.name }));
+  log(`精度レポートを作成しました:${htmlFile}`);
   const wrong = Object.keys(results).reduce((a, k) => a.concat(results[k].graded.filter((g) => g.wrongAuto).map((g) => `${k}:${g.file}`)), []);
   if (wrong.length) log(`\n※ 誤って自動仕分けした書類があります。読み取りルールの調整が必要です:\n  ${wrong.join('\n  ')}`);
-  return { results, outFile };
+  return { results, outFile, htmlFile };
 }
 
 module.exports = { evaluate, grade, summarize, loadAnswers };

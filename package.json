@@ -10,7 +10,8 @@
     "local": "node local/sorter.js",
     "local:app": "node local/server.js --config local/config.json",
     "evaluate": "node local/evaluate.js",
-    "doctor": "node local/doctor.js"
+    "doctor": "node local/doctor.js",
+    "report": "node local/report.js"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
