@@ -34,6 +34,7 @@ const ST = require('./settings.js');
 const U = require('./users.js');
 const PdfText = require('../src/pdftext.js');
 const BRAND = require('./brand.js');
+const R = require('./report.js');
 
 const DUP_FOLDER = '_重複(削除候補)';
 const SESSION_IDLE_MS = 4 * 60 * 60 * 1000;     // 4時間操作が無ければログアウト
@@ -235,6 +236,48 @@ function createServer(configPath) {
     return { ok: true, autoRunMinutes: m };
   }
 
+  // ---------- 記録(書類一覧.csv)を読む ----------
+  function readLog() {
+    const file = path.join(cfg().archive, S.LOG_NAME);
+    if (!fs.existsSync(file)) return { headers: S.HEADERS, rows: [] };
+    const rows = S.parseCsv(fs.readFileSync(file, 'utf8'));
+    return { headers: rows[0] || S.HEADERS, rows: rows.slice(1) };
+  }
+
+  // 仕分け済みの書類を探す(新しい順)
+  function records(q) {
+    const c = cfg();
+    const { headers, rows } = readLog();
+    const col = (r, n) => r[headers.indexOf(n)] || '';
+    const words = String(q.q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const out = [];
+    for (let i = rows.length - 1; i >= 0 && out.length < Math.min(500, parseInt(q.limit, 10) || 200); i--) {
+      const r = rows[i];
+      const st = col(r, 'ステータス');
+      if (q.status === 'filed' && st !== 'OK' && st !== '確定済み') continue;
+      if (q.status === 'review' && ['要確認', '重複の疑い', 'エラー'].indexOf(st) < 0) continue;
+      if (q.month && col(r, '処理日時').slice(0, 7) !== q.month) continue;
+      const hay = [col(r, '顧問先コード'), col(r, '顧問先名'), col(r, '書類種別'), col(r, '新ファイル名'), col(r, '元のファイル名')].join(' ').toLowerCase();
+      if (words.some((w) => hay.indexOf(w) < 0)) continue;
+      const folder = col(r, '保存先フォルダ');
+      out.push({
+        at: col(r, '処理日時'), status: st, method: col(r, '判定方法'), docType: col(r, '書類種別'),
+        clientCode: col(r, '顧問先コード'), clientName: col(r, '顧問先名'), periodStart: col(r, '対象期間(開始)'), periodEnd: col(r, '対象期間(終了)'),
+        fileName: col(r, '新ファイル名'), folder, originalName: col(r, '元のファイル名'), memo: col(r, '確認メモ'),
+        fullPath: (st === 'OK' || st === '確定済み') && folder ? path.join(c.archive, folder, col(r, '新ファイル名')) : ''
+      });
+    }
+    return out;
+  }
+
+  // 今月の件数(画面の上部に出す)
+  function thisMonth() {
+    const month = S.nowText().slice(0, 7);
+    const { headers, rows } = readLog();
+    const sum = R.summarizeLog(rows, headers, { from: month, to: month });
+    return { month, auto: sum.auto, human: sum.human, confirmed: sum.confirmed };
+  }
+
   async function status(user) {
     const c = cfg();
     const inboxCount = fs.existsSync(c.inbox) ? fs.readdirSync(c.inbox).filter((f) => /\.pdf$/i.test(f)).length : null;
@@ -249,7 +292,7 @@ function createServer(configPath) {
       docTypes: X.typesFor(c.rules).map((d) => d.name),
       docTypeKinds: X.typesFor(c.rules).reduce((m, d) => { m[d.name] = d.periodKind; return m; }, {}),
       ai: { mode: c.ai.mode, model: c.ai.model, ok: ai.ok, reason: ai.reason || '' },
-      running: state.running, last: state.last,
+      running: state.running, last: state.last, thisMonth: thisMonth(),
       autoRunMinutes: state.timer ? state.autoMinutes : 0, nextRunAt: state.nextRunAt
     };
   }
@@ -336,6 +379,24 @@ function createServer(configPath) {
         const p = safeReviewPath(url.searchParams.get('file'));
         if (!p) return send(400, { error: 'このファイルは表示できません' });
         return send(200, fs.readFileSync(p), 'application/pdf');
+      }
+      if (req.method === 'GET' && url.pathname === '/api/records') {
+        return send(200, { items: records({ q: url.searchParams.get('q'), status: url.searchParams.get('status'), month: url.searchParams.get('month'), limit: url.searchParams.get('limit') }) });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/suggest') {
+        // 確定する前に、付く名前と保存先を見せる
+        const c = cfg();
+        const client = S.loadClients(c.clientsFile).find((x) => String(x.code) === String(url.searchParams.get('clientCode')));
+        const fields = { clientCode: client ? client.code : '', clientName: client ? client.name : '', docType: url.searchParams.get('docType') || '',
+          periodStart: url.searchParams.get('periodStart') || '', periodEnd: url.searchParams.get('periodEnd') || '' };
+        if (!client || !fields.docType || !/^\d{4}-\d{2}-\d{2}$/.test(fields.periodEnd)) return send(200, { ready: false });
+        const n = X.suggestNames(fields, client, c.rules);
+        return send(200, { ready: true, folder: n.folder.join(' / '), fileName: n.fileName });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/report') {
+        const { headers, rows } = readLog();
+        const opts = { minutes: parseFloat(url.searchParams.get('minutes')) || 1, office: cfg().office.name };
+        return send(200, R.effectReport(R.summarizeLog(rows, headers, opts), opts), 'text/html; charset=utf-8');
       }
       if (req.method === 'GET' && url.pathname === '/api/settings') { adminOnly(); return send(200, ST.getSettings(configPath)); }
       if (req.method === 'GET' && url.pathname === '/api/users') { adminOnly(); return send(200, { users: U.list(configPath), roles: U.ROLES, minPassword: U.MIN_PASSWORD }); }

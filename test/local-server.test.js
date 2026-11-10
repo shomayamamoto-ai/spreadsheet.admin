@@ -131,6 +131,22 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
     assert.ok(fs.existsSync(path.join(dir, '保管', '_重複(削除候補)', 'scan_0009.pdf')));
     assert.deepStrictEqual((await request(port, 'GET', '/api/review')).json.items, []);
 
+    // 確定する前の「仕分け先」の見本(入力が足りないときは ready:false)
+    const sug = (await request(port, 'GET', '/api/suggest?docType=' + encodeURIComponent('月次試算表') + '&clientCode=10001&periodStart=2025-05-01&periodEnd=2025-05-31')).json;
+    assert.deepStrictEqual(sug, { ready: true, folder: '10001_株式会社さくら建設 / 2026年3月期 / 月次試算表', fileName: '10001_株式会社さくら建設_2025-05_月次試算表.pdf' });
+    assert.strictEqual((await request(port, 'GET', '/api/suggest?docType=x&clientCode=99999&periodEnd=2025-05-31')).json.ready, false);
+    // 記録を探す(新しい順・キーワードは全部含むもの・保存場所つき)
+    const rec = (await request(port, 'GET', '/api/records?q=' + encodeURIComponent('さくら 試算表') + '&status=filed')).json.items;
+    assert.deepStrictEqual(rec.map((x) => x.periodEnd), ['2025-04-30', '2025-03-31']);
+    assert.ok(rec[0].fullPath.endsWith(path.join('10001_株式会社さくら建設', '2026年3月期', '月次試算表', '10001_株式会社さくら建設_2025-04_月次試算表.pdf')));
+    assert.strictEqual((await request(port, 'GET', '/api/records?status=review')).json.items.length, 2);
+    // 導入効果レポートを画面から開ける
+    const rep = await request(port, 'GET', '/api/report');
+    assert.strictEqual(rep.status, 200);
+    assert.match(rep.text, /導入効果レポート/);
+    // 状態に今月の件数が入る
+    assert.strictEqual((await request(port, 'GET', '/api/status')).json.thisMonth.auto, 7);
+
     const csv = fs.readFileSync(path.join(dir, '保管', '書類一覧.csv'), 'utf8');
     assert.match(csv, /確定済み,人が確定\(このパソコンの管理者\),月次試算表,10003/);
     assert.match(csv, /除外,人が判断/);

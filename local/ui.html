@@ -10,168 +10,257 @@
 <link rel="stylesheet" href="/fonts/line-seed-jp/800.css">
 <link rel="stylesheet" href="/fonts/ibm-plex-mono/400.css">
 <style>
-/* 外部の部品(フォントなど)を読み込まない。インターネットなしで動く */
+/* 画面の考え方:職員の仕事(要確認の確定 → 仕分け → 記録を探す)の順にタブを並べ、
+   いちばん多い「要確認の確定」は、PDF・入力欄・仕分け先の見本を1画面に収める */
 :root {
-  --paper: #f4f7f5; --surface: #ffffff; --ink: #1c2923; --muted: #56675e;
-  --rule: #cddbd3; --rule-strong: #9fbcae; --accent: #1d6a50; --accent-ink: #ffffff;
-  --accent-soft: #e2efe8; --warn: #8f5200; --warn-soft: #fff0d9; --err: #b3261e; --err-soft: #fde7e9; --head: #eaf1ed;
+  --paper: #f3f6f4; --surface: #ffffff; --sunken: #eef3f0; --ink: #1b2822; --muted: #55665d;
+  --rule: #d5e1da; --rule-strong: #9fbcae; --accent: #1d6a50; --accent-ink: #ffffff; --accent-soft: #e1eee7;
+  --warn: #8f5200; --warn-soft: #fff0d9; --err: #b3261e; --err-soft: #fde7e9;
   --font: "LINE Seed JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
   --mono: "IBM Plex Mono", "LINE Seed JP", ui-monospace, Consolas, Menlo, monospace;
+  --bar-h: 58px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3; --rule: #2b3a33; --rule-strong: #3f574b;
-    --accent: #62c39a; --accent-ink: #0d1a14; --accent-soft: #1b3228; --warn: #f2b65c; --warn-soft: #3a2a12;
-    --err: #f28b82; --err-soft: #3b1d1b; --head: #1e2a24; color-scheme: dark;
+    --paper: #101714; --surface: #17201c; --sunken: #131b17; --ink: #e2ebe6; --muted: #9caea4;
+    --rule: #2a3932; --rule-strong: #3f574b; --accent: #63c49b; --accent-ink: #0c1912; --accent-soft: #1a3127;
+    --warn: #f2b65c; --warn-soft: #3a2a12; --err: #f28b82; --err-soft: #3b1d1b; color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.7 var(--font); padding: 0 16px 48px; }
-.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 16px; padding: 22px 0 14px; border-bottom: 2px solid var(--accent); }
-h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .04em; font-feature-settings: "palt"; }
-.local-badge { font-size: 12px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 2px 10px; }
-.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; min-width: 0; }
-.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
-.panel-head h2 { margin: 0; font-size: 15px; }
-.hint { color: var(--muted); font-size: 12.5px; }
-.status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
-.status > div { padding: 10px 14px; border-right: 1px solid var(--rule); min-width: 0; }
-.status > div:last-child { border-right: 0; }
-.status em { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
-.status strong { font-size: 15px; }
-.status small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.ok-text { color: var(--accent); } .ng-text { color: var(--warn); }
-.actions { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px 14px; }
-button { font: inherit; font-size: 13.5px; cursor: pointer; border-radius: 4px; padding: 7px 14px; border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink); }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.7 var(--font); }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; border-radius: 6px; padding: 7px 14px; border: 1px solid var(--rule-strong); background: var(--surface); font-size: 13.5px; }
+button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+button.primary:disabled { opacity: .45; cursor: not-allowed; }
+button.quiet { border-color: transparent; background: transparent; color: var(--muted); padding: 5px 8px; }
+button.quiet:hover { color: var(--ink); }
 button.danger { border-color: var(--warn); color: var(--warn); }
-button:disabled { opacity: .5; cursor: wait; }
-button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-select, input { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 5px 8px; max-width: 100%; }
-.confirm-run { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 6px 10px; }
-.msg { margin: 0 14px 12px; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
-.msg.ok { background: var(--accent-soft); color: var(--accent); }
-.msg.err { background: var(--err-soft); color: var(--err); }
+button:disabled { cursor: wait; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select, input { font-size: 14px; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 7px 10px; max-width: 100%; }
+input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.hint { color: var(--muted); font-size: 12.5px; }
+.mono { font-family: var(--mono); }
+
+/* ---------- 上部の帯 ---------- */
+.topbar { position: sticky; top: 0; z-index: 20; height: var(--bar-h); display: flex; align-items: center; gap: 18px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--rule); }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand .mark { width: 22px; height: 17px; border: 2px solid var(--accent); border-radius: 3px; background: linear-gradient(var(--accent), var(--accent)) 0 50% / 100% 2px no-repeat; flex: none; }
+.brand b { display: block; font-weight: 800; font-size: 15px; letter-spacing: .04em; font-feature-settings: "palt"; white-space: nowrap; }
+.brand small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav { display: flex; gap: 2px; height: 100%; }
+.nav button { height: 100%; border: 0; border-radius: 0; background: transparent; padding: 0 14px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px; }
+.nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.count { font-family: var(--mono); font-size: 11.5px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--sunken); color: var(--muted); text-align: center; }
+.count.hot { background: var(--warn); color: var(--surface); }
+.me { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+.role { font-size: 11px; border: 1px solid var(--rule-strong); border-radius: 4px; padding: 0 6px; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.on { background: var(--accent); }
+.safe { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+main { padding: 20px; }
+.view { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+.view-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.view-head h1 { margin: 0; font-size: 20px; font-weight: 800; font-feature-settings: "palt"; letter-spacing: .03em; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
+.card-head h2 { margin: 0; font-size: 15px; font-weight: 800; }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin: 0; }
+
+/* ---------- 要確認 ---------- */
+.review { display: grid; grid-template-columns: 270px minmax(0, 1fr) 370px; gap: 14px; height: calc(100vh - var(--bar-h) - 104px); min-height: 520px; }
+.queue { display: flex; flex-direction: column; overflow: hidden; }
+.queue ol { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
+.queue li button { width: 100%; text-align: left; border: 1px solid transparent; background: transparent; padding: 9px 10px; display: grid; gap: 2px; border-radius: 8px; }
+.queue li button:hover { background: var(--sunken); }
+.queue li button[aria-current="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.queue .name { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.queue .why { font-size: 11.5px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.viewer { overflow: hidden; display: flex; flex-direction: column; }
+.viewer-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--rule); font-size: 12px; color: var(--muted); }
+.viewer-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.viewer iframe { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; border-radius: 0 0 10px 10px; }
+.form { display: flex; flex-direction: column; overflow: hidden; }
+.form-body { padding: 14px 16px; overflow-y: auto; display: grid; gap: 14px; align-content: start; flex: 1; }
+.field { display: grid; gap: 4px; }
+.field > span { font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.field input, .field select { width: 100%; }
+.field input[type="checkbox"] { width: 16px; flex: none; }
+.check-line { display: flex; gap: 8px; align-items: center; }
+.field .sub { font-size: 12px; color: var(--muted); }
+.field .ok { color: var(--accent); }
+.field .ng { color: var(--err); }
+.reason { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; }
+.reason b { display: block; }
+.period-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.period-row input[type="month"], .period-row input[type="date"] { flex: 1 1 140px; }
+.period-row input[type="number"] { width: 110px; }
+.dest { background: var(--sunken); border: 1px dashed var(--rule-strong); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; display: grid; gap: 2px; }
+.dest .mono { font-size: 12px; overflow-wrap: anywhere; }
+.dest.ready { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.learn { display: grid; gap: 6px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.learn label { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; }
+.learn b { font-size: 12px; color: var(--muted); }
+.form-foot { border-top: 1px solid var(--rule); padding: 12px 16px; display: grid; gap: 8px; }
+.form-foot .row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; justify-content: space-between; }
+.form-foot .row > * { white-space: nowrap; }
+.form-foot .primary { flex: 1; padding: 10px; font-size: 14.5px; }
+kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
+.inline-confirm { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.empty-state { text-align: center; padding: 56px 20px; display: grid; gap: 10px; justify-items: center; }
+.empty-state .big { font-size: 18px; font-weight: 800; }
+.empty-state .check { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; }
+.empty-state .check::before { content: ""; width: 16px; height: 9px; border-left: 3px solid var(--accent); border-bottom: 3px solid var(--accent); transform: rotate(-45deg) translate(1px, -2px); }
+
+/* ---------- 仕分け ---------- */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.tile em { font-style: normal; font-size: 12px; color: var(--muted); }
+.tile strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tile strong.mono { font-weight: 400; }
+.tile small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.tile .good { color: var(--accent); } .tile .bad { color: var(--warn); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 14px 16px; }
+.summary-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .scroll { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 13px; font-variant-numeric: tabular-nums; }
-th, td { border-bottom: 1px solid var(--rule); padding: 6px 10px; text-align: left; vertical-align: top; }
-th { background: var(--head); font-weight: 700; white-space: nowrap; }
-td.file { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--rule); padding: 8px 12px; text-align: left; vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; background: var(--sunken); }
+tbody tr:hover td { background: var(--sunken); }
+td.file { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; min-width: 220px; }
 td.nowrap { white-space: nowrap; }
-.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
 .pill.ok { background: var(--accent-soft); color: var(--accent); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.err { background: var(--err-soft); color: var(--err); }
-.ai-tag { font-size: 11.5px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
-.empty { color: var(--muted); padding: 18px 14px; margin: 0; }
-.review { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); min-height: 420px; }
-.review-list { border-right: 1px solid var(--rule); margin: 0; padding: 6px; list-style: none; display: grid; gap: 4px; align-content: start; }
-.review-list button { width: 100%; text-align: left; display: grid; gap: 2px; border-color: transparent; }
-.review-list button[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.review-list small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.review-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 14px; padding: 12px; min-width: 0; }
-.review-body iframe { width: 100%; height: 560px; border: 1px solid var(--rule); border-radius: 2px; background: #fff; }
-.form { display: grid; gap: 10px; align-content: start; }
-.form label { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
-.memo { background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 8px 10px; font-size: 12.5px; }
-.preview-name { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
-.btns { display: flex; flex-wrap: wrap; gap: 8px; }
-footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
-.support:not(:empty) { display: block; margin-bottom: 6px; color: var(--ink); }
-.office { font-size: 13px; color: var(--muted); margin-top: 2px; }
-.userbar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: -6px; }
-.userbar button { font-size: 12.5px; padding: 4px 10px; }
-.role { font-size: 11.5px; border: 1px solid var(--rule-strong); border-radius: 3px; padding: 0 6px; margin-left: 4px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.tab { font-weight: 700; }
-.tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.banner { background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 10px 14px; }
-.learn { display: grid; gap: 6px; background: var(--accent-soft); border-radius: 4px; padding: 8px 10px; }
-.learn label { display: flex; gap: 6px; align-items: flex-start; color: var(--ink); font-size: 12.5px; }
-.settings { display: grid; gap: 16px; }
-.set-body { padding: 12px 14px; display: grid; gap: 10px; }
-.set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
-.set-grid label, .set-body > label { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); min-width: 0; }
-.set-grid input, .set-grid select, .set-body > label input { width: 100%; }
-.check { display: flex !important; gap: 6px; align-items: center; color: var(--ink) !important; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { font-family: var(--mono); font-size: 12px; padding: 2px 8px; }
-.preview-box { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
-table.edit { min-width: 640px; }
-table.edit td { padding: 4px 6px; }
-table.edit input, table.edit select { width: 100%; }
-.save-bar { position: sticky; bottom: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pill.mute { background: var(--sunken); color: var(--muted); }
+.ai-tag { font-size: 11px; border: 1px solid var(--accent); color: var(--accent); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+
+/* ---------- 記録 ---------- */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
+.filters input[type="search"] { flex: 1 1 260px; }
+.copy { font-size: 12px; padding: 3px 9px; white-space: nowrap; }
+
+/* ---------- 設定 ---------- */
+.settings { max-width: 1000px; }
+.set-body { padding: 14px 16px; display: grid; gap: 12px; }
+.set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.set-grid label, .set-body > label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); font-weight: 700; min-width: 0; }
+.set-grid input, .set-grid select { width: 100%; }
+.check-row { display: flex !important; gap: 8px; align-items: center; color: var(--ink) !important; font-weight: 400 !important; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 3px 9px; }
+.preview-box { background: var(--sunken); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+table.edit td { padding: 5px 6px; }
+table.edit input, table.edit select { width: 100%; padding: 5px 8px; font-size: 13px; }
+.save-bar { position: sticky; bottom: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; box-shadow: 0 -6px 16px rgba(0,0,0,.05); }
+
+/* ---------- 通知・パスワード ---------- */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(640px, calc(100vw - 32px)); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; font-size: 13.5px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.toast.err { background: var(--err); color: #fff; }
+.pw { padding: 14px 16px; display: grid; gap: 10px; }
+footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var(--muted); font-size: 12px; line-height: 1.9; }
+.support:not(:empty) { display: block; color: var(--ink); }
+
+@media (prefers-reduced-motion: no-preference) { .toast { animation: rise .18s ease-out; } @keyframes rise { from { transform: translate(-50%, 8px); opacity: 0; } } }
+@media (max-width: 1180px) {
+  .review { grid-template-columns: 240px minmax(0, 1fr); height: auto; }
+  .form { grid-column: 1 / -1; }
+  .viewer { min-height: 560px; }
+}
 @media (max-width: 900px) {
+  .topbar { height: auto; flex-wrap: wrap; padding: 8px 14px; gap: 6px 14px; }
+  .nav { height: 40px; order: 3; width: 100%; overflow-x: auto; }
+  .safe { display: none; }
+  main { padding: 14px; }
+  .review { grid-template-columns: minmax(0, 1fr); }
+  .queue ol { max-height: 220px; }
+  .viewer { min-height: 460px; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .set-grid { grid-template-columns: minmax(0, 1fr); }
-  .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .status > div:nth-child(2) { border-right: 0; }
-  .review, .review-body { grid-template-columns: minmax(0, 1fr); }
-  .review-list { border-right: 0; border-bottom: 1px solid var(--rule); }
-  .review-body iframe { height: 420px; }
 }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div><h1>__PRODUCT__</h1><div class="office" id="office-name"></div></div>
-    <div class="tabs" role="tablist">
-      <button type="button" class="tab" role="tab" id="tab-main" aria-selected="true">仕分け</button>
-      <button type="button" class="tab" role="tab" id="tab-settings" aria-selected="false" hidden>設定</button>
-      <span class="local-badge" id="mode-badge">このパソコンの中だけで動作しています</span>
-    </div>
-  </header>
-  <div class="userbar"><span id="me"></span>
-    <button type="button" id="btn-pw" hidden>パスワード変更</button>
-    <button type="button" id="btn-logout">ログアウト</button></div>
-  <section class="panel" id="pw-panel" hidden aria-labelledby="pw-title">
-    <div class="panel-head"><h2 id="pw-title">パスワード変更</h2></div>
-    <div class="set-body"><div class="set-grid">
-      <label for="pw-cur">今のパスワード<input id="pw-cur" type="password" autocomplete="current-password"></label>
-      <label for="pw-new">新しいパスワード(10文字以上)<input id="pw-new" type="password" autocomplete="new-password"></label>
-    </div><div class="btns"><button type="button" class="primary" id="btn-pw-save">変更する</button><button type="button" id="btn-pw-cancel">やめる</button><span class="hint" id="pw-msg"></span></div></div>
-  </section>
-  <p class="banner" id="first-run" hidden>はじめに「設定」で、事務所名・フォルダ・顧問先マスタを登録してください。登録したら「設定を保存」を押します。</p>
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><div><b>__PRODUCT__</b><small id="office-name"></small></div></div>
+  <nav class="nav" role="tablist" aria-label="画面の切り替え">
+    <button type="button" role="tab" id="tab-review" data-view="review" aria-selected="true">要確認 <span class="count" id="count-review">0</span></button>
+    <button type="button" role="tab" id="tab-sort" data-view="sort" aria-selected="false">仕分け <span class="count" id="count-inbox">0</span></button>
+    <button type="button" role="tab" id="tab-records" data-view="records" aria-selected="false">記録</button>
+    <button type="button" role="tab" id="tab-settings" data-view="settings" aria-selected="false" hidden>設定</button>
+  </nav>
+  <div class="me">
+    <span class="safe" id="mode-badge" title="書類の中身は外部に送られません"><span class="dot on"></span><span id="mode-text">このパソコンの中だけで動作</span></span>
+    <span id="me"></span>
+    <button type="button" class="quiet" id="btn-pw" hidden>パスワード変更</button>
+    <button type="button" class="quiet" id="btn-logout">ログアウト</button>
+  </div>
+</header>
 
-  <div id="view-main">
-
-  <section class="panel" aria-label="状態">
-    <div class="status">
-      <div><em>受付フォルダ</em><strong id="st-inbox">―</strong><small id="st-inbox-path"></small></div>
-      <div><em>保存先フォルダ</em><strong>書類保管</strong><small id="st-archive"></small></div>
-      <div><em>ローカルAI</em><strong id="st-ai">確認中…</strong><small id="st-ai-note"></small></div>
-      <div><em>顧問先マスタ</em><strong id="st-clients">―</strong><small>顧問先マスタのCSVから読み込み</small></div>
-    </div>
-  </section>
-
-  <section class="panel" aria-labelledby="run-title">
-    <div class="panel-head"><h2 id="run-title">仕分けの実行</h2><span class="hint">まず「試し実行」で予定を確認してから、「仕分けを実行」してください</span></div>
-    <div class="actions">
-      <button id="btn-dry" type="button">試し実行(ファイルは動かしません)</button>
-      <button id="btn-apply" type="button" class="primary">仕分けを実行</button>
-      <span class="confirm-run" id="confirm-run" hidden>受付フォルダのPDFを移動します。よろしいですか?
-        <button id="btn-apply-yes" type="button" class="primary">実行する</button>
-        <button id="btn-apply-no" type="button">やめる</button></span>
-      <label for="auto" class="hint" id="auto-wrap">自動実行(この画面を開いている間)
-        <select id="auto"><option value="0">しない</option><option value="15">15分ごと</option><option value="30">30分ごと</option><option value="60">60分ごと</option></select></label>
-      <span class="hint" id="auto-note"></span>
-    </div>
-    <p class="msg" id="run-msg" hidden></p>
-    <div id="result"><p class="empty">まだ実行していません。</p></div>
-  </section>
-
-  <section class="panel" aria-labelledby="review-title">
-    <div class="panel-head"><h2 id="review-title">要確認の書類</h2><span class="hint">PDFを見ながら内容を選び、「確定」すると正しいフォルダへ移動します</span></div>
-    <p class="msg" id="review-msg" hidden></p>
-    <div id="review"><p class="empty">要確認の書類はありません。</p></div>
-  </section>
-
+<main>
+  <div class="view" style="margin-bottom:16px" id="notices">
+    <p class="banner" id="first-run" hidden>はじめに「設定」で、事務所名・フォルダ・顧問先マスタを登録してください。登録したら「設定を保存」を押します。</p>
+    <section class="card" id="pw-panel" hidden aria-labelledby="pw-title">
+      <div class="card-head"><h2 id="pw-title">パスワード変更</h2><button type="button" class="quiet" id="btn-pw-cancel">閉じる</button></div>
+      <div class="pw"><div class="set-grid">
+        <label class="field" for="pw-cur"><span>今のパスワード</span><input id="pw-cur" type="password" autocomplete="current-password"></label>
+        <label class="field" for="pw-new"><span>新しいパスワード(10文字以上)</span><input id="pw-new" type="password" autocomplete="new-password"></label>
+      </div><div><button type="button" class="primary" id="btn-pw-save">変更する</button></div></div>
+    </section>
   </div>
 
-  <div id="view-settings" class="settings" hidden>
-    <section class="panel"><div class="panel-head"><h2>事務所とフォルダ</h2></div>
+  <!-- ===== 要確認 ===== -->
+  <div class="view" id="view-review">
+    <div class="view-head"><h1>要確認の書類</h1><span class="hint">PDFを見ながら内容を選び、仕分け先を確かめてから確定します</span></div>
+    <div id="review"></div>
+  </div>
+
+  <!-- ===== 仕分け ===== -->
+  <div class="view" id="view-sort" hidden>
+    <div class="view-head"><h1>仕分け</h1><span class="hint">受付フォルダのPDFを読み取り、フォルダへ仕分けます</span></div>
+    <div class="tiles">
+      <div class="card tile"><em>受付フォルダ</em><strong id="st-inbox">―</strong><small id="st-inbox-path"></small></div>
+      <div class="card tile"><em>今月の自動仕分け</em><strong id="st-month">―</strong><small id="st-month-note"></small></div>
+      <div class="card tile"><em>ローカルAI</em><strong id="st-ai">確認中…</strong><small id="st-ai-note"></small></div>
+      <div class="card tile"><em>自動実行</em><strong id="st-auto">―</strong><small id="st-auto-note"></small></div>
+    </div>
+    <section class="card">
+      <div class="actions">
+        <button id="btn-dry" type="button">試し実行(ファイルは動かしません)</button>
+        <button id="btn-apply" type="button" class="primary">仕分けを実行</button>
+        <span class="inline-confirm" id="confirm-run" hidden>受付フォルダのPDFを移動します。よろしいですか?
+          <button id="btn-apply-yes" type="button" class="primary">実行する</button><button id="btn-apply-no" type="button">やめる</button></span>
+        <label for="auto" class="hint" id="auto-wrap" style="margin-left:auto">自動実行
+          <select id="auto"><option value="0">しない</option><option value="15">15分ごと</option><option value="30">30分ごと</option><option value="60">60分ごと</option></select></label>
+      </div>
+      <div id="result"></div>
+    </section>
+  </div>
+
+  <!-- ===== 記録 ===== -->
+  <div class="view" id="view-records" hidden>
+    <div class="view-head"><h1>記録</h1><a href="/api/report" target="_blank" rel="noopener" class="hint">導入効果レポートを開く</a></div>
+    <section class="card">
+      <div class="filters">
+        <input type="search" id="r-q" placeholder="顧問先・書類種別・ファイル名で探す(例:さくら 試算表)" aria-label="キーワード">
+        <select id="r-status" aria-label="状態"><option value="filed">仕分け済み</option><option value="review">要確認になったもの</option><option value="">すべて</option></select>
+        <input type="month" id="r-month" aria-label="処理した月">
+        <button type="button" class="quiet" id="r-clear">条件をクリア</button>
+      </div>
+      <div id="records"></div>
+    </section>
+  </div>
+
+  <!-- ===== 設定 ===== -->
+  <div class="view settings" id="view-settings" hidden>
+    <div class="view-head"><h1>設定</h1><span class="hint">管理者だけが変更できます</span></div>
+    <section class="card"><div class="card-head"><h2>事務所とフォルダ</h2></div>
       <div class="set-body"><div class="set-grid">
         <label for="s-office">事務所名(画面の上に表示します)<input id="s-office" type="text" placeholder="例:〇〇会計事務所"></label>
         <label for="s-auto">自動実行(画面を開いている間)<select id="s-auto"><option value="0">しない</option><option value="15">15分ごと</option><option value="30">30分ごと</option><option value="60">60分ごと</option></select></label>
@@ -179,8 +268,7 @@ table.edit input, table.edit select { width: 100%; }
         <label for="s-archive">保存先フォルダ(仕分けたPDFと一覧表を置く場所)<input id="s-archive" type="text"></label>
       </div><p class="hint" style="margin:0">フォルダの場所は、エクスプローラーやFinderでフォルダを開き、場所(パス)をコピーして貼り付けてください。無いフォルダは作ります。</p></div>
     </section>
-
-    <section class="panel"><div class="panel-head"><h2>フォルダ名・ファイル名の付け方</h2><span class="hint">事務所のいつもの付け方に合わせられます</span></div>
+    <section class="card"><div class="card-head"><h2>フォルダ名・ファイル名の付け方</h2><span class="hint">事務所のいつもの付け方に合わせられます</span></div>
       <div class="set-body">
         <div class="chips" id="placeholders"></div>
         <div class="set-grid">
@@ -190,58 +278,54 @@ table.edit input, table.edit select { width: 100%; }
         <div class="preview-box" id="naming-preview">見本:―</div>
       </div>
     </section>
-
-    <section class="panel"><div class="panel-head"><h2>顧問先マスタ</h2>
-        <div class="btns"><label class="hint" for="s-csv">CSVから読み込む <input id="s-csv" type="file" accept=".csv,text/csv"></label><button type="button" id="btn-add-client">顧問先を追加</button></div></div>
+    <section class="card"><div class="card-head"><h2>顧問先マスタ</h2>
+        <div class="chips"><label class="hint" for="s-csv">CSVから読み込む <input id="s-csv" type="file" accept=".csv,text/csv"></label><button type="button" id="btn-add-client">顧問先を追加</button></div></div>
       <div class="scroll"><table class="edit"><thead><tr><th>顧問先コード</th><th>顧問先名(正式名称)</th><th>別名(「、」区切り)</th><th>決算月</th><th></th></tr></thead><tbody id="s-clients"></tbody></table></div>
-      <p class="hint" style="margin:6px 14px 12px">CSVの列:顧問先コード,顧問先名,別名,決算月(1行目は見出し)。別名には、書類に出てくる略称(例:正式名称「株式会社〇〇」に対して「〇〇」)を入れると読み取りやすくなります。</p>
+      <p class="hint" style="margin:8px 16px 14px">CSVの列:顧問先コード,顧問先名,別名,決算月(1行目は見出し)。別名には、書類に出てくる略称(例:正式名称「株式会社〇〇」に対して「〇〇」)を入れると読み取りやすくなります。</p>
     </section>
-
-    <section class="panel"><div class="panel-head"><h2>書類種別</h2><button type="button" id="btn-add-type">書類種別を追加</button></div>
+    <section class="card"><div class="card-head"><h2>書類種別</h2><button type="button" id="btn-add-type">書類種別を追加</button></div>
       <div class="scroll"><table class="edit"><thead><tr><th>使う</th><th>書類種別</th><th>期間の種類</th><th>表題の目印(追加分。「、」区切り)</th></tr></thead><tbody id="s-types"></tbody></table></div>
-      <p class="hint" style="margin:6px 14px 12px">「表題の目印」は、帳票のいちばん上に書かれているタイトルの言葉です(例:損益推移表)。要確認の書類を確定するときに「覚える」を選ぶと、ここに自動で増えます。</p>
+      <p class="hint" style="margin:8px 16px 14px">「表題の目印」は、帳票のいちばん上に書かれているタイトルの言葉です(例:損益推移表)。要確認の書類を確定するときに「覚える」を選ぶと、ここに自動で増えます。</p>
     </section>
-
-    <section class="panel"><div class="panel-head"><h2>ローカルAI と スキャンした書類</h2><span class="hint">AIはこのパソコンの中でだけ動きます</span></div>
+    <section class="card"><div class="card-head"><h2>ローカルAI と スキャンした書類</h2><span class="hint">AIは事務所のパソコンの中でだけ動きます</span></div>
       <div class="set-body"><div class="set-grid">
         <label for="s-ai-mode">ローカルAIの使い方<select id="s-ai-mode">
           <option value="fallback">ルールで迷った書類だけに使う(おすすめ)</option><option value="always">すべての書類で確認させる</option><option value="off">使わない</option></select></label>
         <label for="s-ai-model">文字を読むモデル(Ollamaのモデル名)<input id="s-ai-model" type="text"></label>
-        <label class="check" for="s-ocr"><input id="s-ocr" type="checkbox"> スキャンした紙の書類(画像のPDF)を、ローカルAIで文字起こしする</label>
+        <label class="check-row" for="s-ocr"><input id="s-ocr" type="checkbox"> スキャンした紙の書類(画像のPDF)を、ローカルAIで文字起こしする</label>
         <label for="s-ocr-model">画像を読むモデル(Ollamaのモデル名)<input id="s-ocr-model" type="text"></label>
-        <label class="check" for="s-ocr-auto"><input id="s-ocr-auto" type="checkbox"> 文字起こしした書類も、自動で仕分ける(おすすめしません。読み間違いに気づけないため)</label>
+        <label class="check-row" for="s-ocr-auto"><input id="s-ocr-auto" type="checkbox"> 文字起こしした書類も、自動で仕分ける(おすすめしません)</label>
       </div></div>
     </section>
-
-    <section class="panel" id="users-panel"><div class="panel-head"><h2>利用者(職員)</h2><span class="hint" id="users-hint">事務所内LANで使うときに、職員ごとの ID とパスワードを登録します</span></div>
+    <section class="card" id="users-panel"><div class="card-head"><h2>利用者(職員)</h2><span class="hint">事務所内LANで使うときの、職員ごとの ID とパスワード</span></div>
       <div class="scroll"><table class="edit"><thead><tr><th>ID</th><th>名前</th><th>権限</th><th>使える</th><th>パスワードの再設定</th></tr></thead><tbody id="u-list"></tbody></table></div>
       <div class="set-body"><div class="set-grid">
         <label for="u-id">ID(半角英数字)<input id="u-id" type="text" autocomplete="off"></label>
         <label for="u-name">名前<input id="u-name" type="text" autocomplete="off"></label>
         <label for="u-role">権限<select id="u-role"><option value="staff">職員(仕分け・確定)</option><option value="admin">管理者(設定・利用者の管理も)</option></select></label>
         <label for="u-pw">はじめのパスワード(10文字以上)<input id="u-pw" type="password" autocomplete="new-password"></label>
-      </div><div class="btns"><button type="button" id="btn-u-add">利用者を追加</button><span class="hint" id="u-msg"></span></div></div>
+      </div><div><button type="button" id="btn-u-add">利用者を追加</button></div></div>
     </section>
-
     <div class="save-bar"><button type="button" class="primary" id="btn-save">設定を保存</button><span class="hint" id="save-msg"></span></div>
   </div>
+</main>
 
-  <footer id="footer">
-    <span id="support" class="support">__SUPPORT__</span>
-    ・PDFの読み取り、AIでの補完、ファイルの移動は、すべて事務所のパソコン(この仕組みを入れたパソコン)の中で行います。外部への送信はしません。<br>
-    ・AIの答えは、根拠の文章がPDFに書かれているかを確かめてから使います。確かめられないものは「要確認」になります。<br>
-    <span id="foot-close">・この画面は、黒い画面(起動したウィンドウ)を閉じると終了します。</span>
-  </footer>
-</div>
+<footer id="footer">
+  <span id="support" class="support">__SUPPORT__</span>
+  PDFの読み取り・AIでの補完・ファイルの移動は、すべて事務所のパソコン(この仕組みを入れたパソコン)の中で行い、外部には送りません。
+  AIの答えは、根拠の文章がPDFに書かれているかを確かめてから使います。<span id="foot-close">この画面は、黒い画面(起動したウィンドウ)を閉じると終了します。</span>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (function () {
   'use strict';
   var TOKEN = '__TOKEN__';
   var $ = function (id) { return document.getElementById(id); };
-  var info = { clients: [], docTypes: [] };
+  var info = { clients: [], docTypes: [], docTypeKinds: {} };
   var reviewItems = [], current = null, forceFile = null, shownFirst = false;
 
+  // ---------- 共通 ----------
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -254,21 +338,24 @@ table.edit input, table.edit select { width: 100%; }
       body: body ? JSON.stringify(body) : undefined
     }).then(function (res) {
       return res.json().then(function (data) {
-        // ログインの期限が切れたときは、ログイン画面へ戻る
         if (res.status === 403 && /ログインし直して/.test(data.error || '')) { location.href = '/'; }
         if (!res.ok) throw new Error(data.error || 'エラーが起きました');
         return data;
       });
     });
   }
-  function msg(id, text, ok) {
-    var el = $(id);
-    el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); el.hidden = !text;
+  var toastTimer;
+  function toast(text, isErr) {
+    var t = $('toast');
+    t.textContent = text; t.className = 'toast' + (isErr ? ' err' : ''); t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, isErr ? 7000 : 4000);
   }
   function pill(s) {
-    var cls = s === 'OK' || s === '確定済み' ? 'ok' : s === 'エラー' ? 'err' : 'warn';
+    var cls = s === 'OK' || s === '確定済み' ? 'ok' : s === 'エラー' ? 'err' : s === '除外' ? 'mute' : 'warn';
     return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
   }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function lastDay(y, m) { return new Date(y, m, 0).getDate(); }
   // 期間を「2025年3月分」「2025年3月期」「2024年分」の形で表示する
   function period(a, b, docType) {
     if (!b) return '―';
@@ -277,226 +364,355 @@ table.edit input, table.edit select { width: 100%; }
     if (kind === 'date') return b.slice(0, 4) + '/' + b.slice(5, 7) + '/' + b.slice(8, 10);
     if (a && a.slice(0, 7) === b.slice(0, 7)) return b.slice(0, 4) + '年' + (+b.slice(5, 7)) + '月分';
     if (kind === 'fiscal') return b.slice(0, 4) + '年' + (+b.slice(5, 7)) + '月期';
+    if (kind === 'month' && a) return a.slice(0, 4) + '年' + (+a.slice(5, 7)) + '〜' + (+b.slice(5, 7)) + '月分';
     return (a || '') + '〜' + b;
   }
+  function copyText(text) {
+    var done = function () { toast('場所をコピーしました。エクスプローラーやFinderに貼り付けて開けます'); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () { fallback(); }); return; }
+    fallback();
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast('コピーできませんでした', true); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  // ---------- 画面の切り替え(アドレスの #review などで、開く画面を覚える)----------
+  var VIEWS = ['review', 'sort', 'records', 'settings'];
+  function showView(v) {
+    if (VIEWS.indexOf(v) < 0 || ($('tab-' + v) && $('tab-' + v).hidden)) v = 'review';
+    VIEWS.forEach(function (x) {
+      $('view-' + x).hidden = x !== v;
+      $('tab-' + x).setAttribute('aria-selected', String(x === v));
+    });
+    if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
+    if (v === 'records') loadRecords();
+    if (v === 'settings') { loadSettings(); if (!$('users-panel').hidden) loadUsers(); }
+  }
+  VIEWS.forEach(function (v) { $('tab-' + v).addEventListener('click', function () { showView(v); }); });
+  window.addEventListener('hashchange', function () { showView(location.hash.slice(1)); });
 
   // ---------- 状態 ----------
   function loadStatus() {
     return api('GET', '/api/status').then(function (s) {
       info = s;
       var lan = s.mode === 'lan';
-      $('mode-badge').textContent = lan ? '事務所内のネットワークだけで動作しています' : 'このパソコンの中だけで動作しています';
-      $('me').innerHTML = esc(s.user.name) + '<span class="role">' + esc(s.user.roleLabel) + '</span>';
+      $('mode-text').textContent = lan ? '事務所内のネットワークだけで動作' : 'このパソコンの中だけで動作';
+      $('me').innerHTML = esc(s.user.name) + ' <span class="role">' + esc(s.user.roleLabel) + '</span>';
       $('btn-pw').hidden = s.user.local;
       $('btn-logout').hidden = !lan && s.user.local;
       $('tab-settings').hidden = s.user.role !== 'admin';
       $('users-panel').hidden = !lan;
-      $('auto-wrap').hidden = s.user.role !== 'admin';      // 自動実行の変更は管理者だけ
-      $('foot-close').hidden = !s.user.local;               // 職員のパソコンでは関係ない案内
+      $('auto-wrap').hidden = s.user.role !== 'admin';
+      $('foot-close').hidden = !s.user.local;
       $('office-name').textContent = s.office && s.office.name ? s.office.name : '';
       $('first-run').hidden = !s.firstRun;
-      if ((s.firstRun || s.needsUsers) && s.user.role === 'admin' && !shownFirst) { shownFirst = true; showTab('settings'); }
-      $('st-inbox').textContent = s.inboxCount == null ? 'フォルダが見つかりません' : 'PDF ' + s.inboxCount + ' 件';
-      $('st-inbox').className = s.inboxCount == null ? 'ng-text' : '';
-      $('st-inbox-path').textContent = s.inbox;
-      $('st-archive').textContent = s.archive;
-      $('st-ai').textContent = s.ai.ok ? '使えます' : (s.ai.mode === 'off' ? '使わない設定' : '使えません');
-      $('st-ai').className = s.ai.ok ? 'ok-text' : 'ng-text';
-      $('st-ai-note').textContent = s.ai.ok ? 'モデル:' + s.ai.model + '(迷った書類だけに使用)' : s.ai.reason + '(ルールだけで判定します)';
-      $('st-clients').textContent = s.clients.length + ' 社';
+      if ((s.firstRun || s.needsUsers) && s.user.role === 'admin' && !shownFirst) { shownFirst = true; showView('settings'); }
+      // 仕分け画面の状態
+      var inbox = s.inboxCount == null ? null : s.inboxCount;
+      $('count-inbox').textContent = inbox == null ? '!' : inbox;
+      $('count-inbox').className = 'count' + (inbox ? ' hot' : '');
+      $('st-inbox').textContent = inbox == null ? 'フォルダが見つかりません' : inbox + ' 件 待ち';
+      $('st-inbox').className = inbox == null ? 'bad' : '';
+      $('st-inbox-path').textContent = s.inbox; $('st-inbox-path').title = s.inbox;
+      var m = s.thisMonth || { auto: 0, human: 0 };
+      var total = m.auto + m.human;
+      $('st-month').textContent = total ? Math.round(m.auto / total * 100) + '%' : '―';
+      $('st-month-note').textContent = total ? m.month + ':' + total + '件中 ' + m.auto + '件を自動で仕分け' : '今月はまだ仕分けていません';
+      $('st-ai').textContent = s.ai.ok ? '使えます' : (s.ai.mode === 'off' ? '使わない設定' : 'ルールだけで判定中');
+      $('st-ai').className = s.ai.ok ? 'good' : 'bad';
+      $('st-ai-note').textContent = s.ai.ok ? 'モデル:' + s.ai.model : s.ai.reason;
+      $('st-auto').textContent = s.autoRunMinutes ? s.autoRunMinutes + '分ごと' : 'しない';
+      $('st-auto-note').textContent = s.nextRunAt ? '次の実行:' + new Date(s.nextRunAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : (s.user.role === 'admin' ? '右下の「自動実行」で設定できます' : '');
       $('auto').value = String(s.autoRunMinutes || 0);
-      $('auto-note').textContent = s.nextRunAt ? '次の実行:' + new Date(s.nextRunAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '';
-      if (s.last) renderResult(s.last);
-    }).catch(function (e) { msg('run-msg', e.message, false); });
+      if (s.last && !$('result').innerHTML) renderResult(s.last);
+      if (!$('result').innerHTML) $('result').innerHTML = '<p class="hint" style="padding:0 16px 16px;margin:0">まだ実行していません。まず「試し実行」で、仕分けの予定を確かめられます。</p>';
+      renderClientList();
+    }).catch(function (e) { toast(e.message, true); });
   }
 
-  // ---------- 実行 ----------
+  // ---------- 仕分け ----------
   function renderResult(r) {
     var h = r.headers, idx = function (n) { return h.indexOf(n); };
-    if (!r.rows.length) { $('result').innerHTML = '<p class="empty">受付フォルダにPDFはありませんでした。(' + esc(r.at) + ')</p>'; return; }
+    if (!r.rows.length) { $('result').innerHTML = '<p class="hint" style="padding:0 16px 16px;margin:0">受付フォルダにPDFはありませんでした(' + esc(r.at) + ')。</p>'; return; }
+    var count = function (st) { return r.rows.filter(function (x) { return x[1] === st; }).length; };
     var rows = r.rows.map(function (x) {
       var ai = x[idx('AIで補った項目')];
       return '<tr><td>' + pill(x[idx('ステータス')]) + '</td><td>' + esc(x[idx('書類種別')] || '―') + '</td>' +
         '<td>' + esc((x[idx('顧問先コード')] ? x[idx('顧問先コード')] + ' ' : '') + (x[idx('顧問先名')] || '―')) + '</td>' +
         '<td class="nowrap">' + esc(period(x[idx('対象期間(開始)')], x[idx('対象期間(終了)')], x[idx('書類種別')])) + '</td>' +
-        '<td class="file">' + esc(x[idx('保存先フォルダ')] + ' / ' + x[idx('新ファイル名')]) + '</td>' +
-        '<td>' + (ai ? '<span class="ai-tag">AIで補完:' + esc(ai) + '</span>' : '') + '</td>' +
-        '<td>' + esc(x[idx('確認メモ')]) + '</td><td class="file nowrap">' + esc(x[idx('元のファイル名')]) + '</td></tr>';
+        '<td class="file">' + esc(x[idx('保存先フォルダ')] + ' / ' + x[idx('新ファイル名')]) + (ai ? ' <span class="ai-tag">AIで補完:' + esc(ai) + '</span>' : '') + '</td>' +
+        '<td>' + esc(x[idx('確認メモ')]) + '</td></tr>';
     }).join('');
-    $('result').innerHTML = '<p class="empty" style="padding:8px 14px">' + (r.apply ? '仕分けを実行しました' : '試し実行の結果です(ファイルは動かしていません)') + '(' + esc(r.at) + ')</p>' +
-      '<div class="scroll"><table><thead><tr><th>ステータス</th><th>書類種別</th><th>顧問先</th><th>対象期間</th><th>保存先</th><th>AI</th><th>確認メモ</th><th>元のファイル名</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    $('result').innerHTML = '<div class="card-head" style="border-top:1px solid var(--rule)"><h2>' + (r.apply ? '仕分けの結果' : '試し実行の結果(ファイルは動かしていません)') + '</h2>' +
+      '<div class="summary-chips"><span class="pill ok">OK ' + count('OK') + '</span><span class="pill warn">要確認 ' + count('要確認') + '</span><span class="pill warn">重複の疑い ' + count('重複の疑い') + '</span>' + (count('エラー') ? '<span class="pill err">エラー ' + count('エラー') + '</span>' : '') + '<span class="hint">' + esc(r.at) + (r.by ? '・' + esc(r.by) : '') + '</span></div></div>' +
+      '<div class="scroll"><table><thead><tr><th>状態</th><th>書類種別</th><th>顧問先</th><th>対象期間</th><th>保存先 / ファイル名</th><th>確認メモ</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
-
   function setBusy(b) { ['btn-dry', 'btn-apply', 'btn-apply-yes'].forEach(function (id) { $(id).disabled = b; }); }
-
   function runSort(apply) {
     setBusy(true);
-    msg('run-msg', apply ? '仕分けています…(AIを使う書類があると、1件に数十秒かかることがあります)' : '試し実行しています…', true);
+    toast(apply ? '仕分けています…(AIを使う書類があると、1件に数十秒かかることがあります)' : '試し実行しています…');
     api('POST', '/api/run', { apply: apply }).then(function (r) {
       renderResult(r);
-      var count = function (s) { return r.rows.filter(function (x) { return x[1] === s; }).length; };
-      msg('run-msg', (apply ? '仕分けました。' : '試し実行しました。') + 'OK ' + count('OK') + ' 件/要確認 ' + count('要確認') + ' 件/重複の疑い ' + count('重複の疑い') + ' 件', true);
+      var c = function (st) { return r.rows.filter(function (x) { return x[1] === st; }).length; };
+      toast((apply ? '仕分けました。' : '試し実行しました。') + 'OK ' + c('OK') + '件・要確認 ' + (c('要確認') + c('重複の疑い')) + '件');
       return Promise.all([loadStatus(), loadReview()]);
-    }).catch(function (e) { msg('run-msg', e.message, false); }).then(function () { setBusy(false); });
+    }).catch(function (e) { toast(e.message, true); }).then(function () { setBusy(false); });
   }
-
   $('btn-dry').addEventListener('click', function () { runSort(false); });
-  $('btn-apply').addEventListener('click', function () { $('confirm-run').hidden = false; });
+  $('btn-apply').addEventListener('click', function () { $('confirm-run').hidden = false; $('btn-apply-yes').focus(); });
   $('btn-apply-no').addEventListener('click', function () { $('confirm-run').hidden = true; });
   $('btn-apply-yes').addEventListener('click', function () { $('confirm-run').hidden = true; runSort(true); });
   $('auto').addEventListener('change', function () {
-    api('POST', '/api/auto', { minutes: +$('auto').value }).then(loadStatus).catch(function (e) { msg('run-msg', e.message, false); });
+    api('POST', '/api/auto', { minutes: +$('auto').value }).then(function () { toast('自動実行を変更しました'); return loadStatus(); }).catch(function (e) { toast(e.message, true); });
   });
 
   // ---------- 要確認 ----------
+  function renderClientList() {
+    var dl = $('client-list');
+    if (!dl) { dl = document.createElement('datalist'); dl.id = 'client-list'; document.body.appendChild(dl); }
+    dl.innerHTML = (info.clients || []).map(function (c) { return '<option value="' + esc(c.code + ' ' + c.name) + '">'; }).join('');
+  }
   function loadReview() {
     return api('GET', '/api/review').then(function (r) {
       reviewItems = r.items;
-      if (!reviewItems.length) { $('review').innerHTML = '<p class="empty">要確認の書類はありません。</p>'; current = null; return; }
+      $('count-review').textContent = reviewItems.length;
+      $('count-review').className = 'count' + (reviewItems.length ? ' hot' : '');
+      if (!reviewItems.length) {
+        current = null;
+        $('review').innerHTML = '<div class="card empty-state"><span class="check"></span><span class="big">要確認の書類はありません</span>' +
+          '<span class="hint">新しいPDFは「仕分け」から読み取れます。自動実行を設定していれば、そのまま仕分けられます。</span>' +
+          '<button type="button" id="go-sort">仕分けの画面へ</button></div>';
+        $('go-sort').addEventListener('click', function () { showView('sort'); });
+        return;
+      }
       if (!current || !reviewItems.some(function (x) { return x.file === current; })) current = reviewItems[0].file;
       renderReview();
-    }).catch(function (e) { msg('review-msg', e.message, false); });
+    }).catch(function (e) { toast(e.message, true); });
   }
 
-  function options(list, value, label) {
-    return '<option value="">選んでください</option>' + list.map(function (o) {
-      var v = typeof o === 'string' ? o : o.code;
-      var t = typeof o === 'string' ? o : o.code + ' ' + o.name;
-      return '<option value="' + esc(v) + '"' + (v === value ? ' selected' : '') + '>' + esc(t) + '</option>';
-    }).join('');
+  // 書類種別ごとに、期間の入れ方を変える
+  function periodControl(kind, start, end) {
+    var ym = function (d) { return d ? d.slice(0, 7) : ''; };
+    if (kind === 'month') {
+      var multi = start && end && ym(start) !== ym(end);
+      return '<div class="period-row"><input type="month" id="p-from" aria-label="対象の月" value="' + esc(ym(start || end)) + '">' +
+        '<span id="p-to-wrap"' + (multi ? '' : ' hidden') + '>〜 <input type="month" id="p-to" aria-label="最後の月" value="' + esc(ym(end)) + '"></span></div>' +
+        '<label class="sub check-line"><input type="checkbox" id="p-multi"' + (multi ? ' checked' : '') + '> 複数の月をまとめた書類(納期の特例など)</label>';
+    }
+    if (kind === 'fiscal') return '<div class="period-row"><input type="month" id="p-fiscal" aria-label="決算の月" value="' + esc(ym(end)) + '"><span class="sub">月期(決算の年月)</span></div>';
+    if (kind === 'year') return '<div class="period-row"><input type="number" id="p-year" min="2000" max="2100" aria-label="年" value="' + esc(end ? end.slice(0, 4) : '') + '"><span class="sub">年分</span></div>';
+    if (kind === 'date') return '<div class="period-row"><input type="date" id="p-date" aria-label="提出日・開催日" value="' + esc(end || '') + '"></div>';
+    return '<p class="sub" style="margin:0">先に書類種別を選んでください</p>';
   }
-
-  // 確定するときに「覚える」もの(次から自動で読めるようにする)
-  function learnBlock(it) {
-    var parts = [];
-    if (it.title) {
-      parts.push('<label for="learn-title"><input id="learn-title" type="checkbox"' + (it.docType ? '' : ' checked') + '> この帳票の表題「' + esc(it.title) + '」を、選んだ書類種別の目印として覚える</label>');
+  function readPeriod(kind) {
+    var v = function (id) { return $(id) ? $(id).value : ''; };
+    var mEnd = function (s) { var y = +s.slice(0, 4), m = +s.slice(5, 7); return s + '-' + pad(lastDay(y, m)); };
+    if (kind === 'month') {
+      var f = v('p-from'); if (!f) return null;
+      var t = $('p-multi') && $('p-multi').checked && v('p-to') ? v('p-to') : f;
+      if (t < f) return { error: '最後の月が、最初の月より前になっています' };
+      return { start: f + '-01', end: mEnd(t) };
     }
-    if (it.aliasCandidate) {
-      parts.push('<label for="learn-alias"><input id="learn-alias" type="checkbox" checked> 書類に書かれた「' + esc(it.aliasCandidate) + '」を、選んだ顧問先の別名として覚える</label>');
+    if (kind === 'fiscal') {
+      var e = v('p-fiscal'); if (!e) return null;
+      var y = +e.slice(0, 4), m = +e.slice(5, 7);
+      var sy = m === 12 ? y : y - 1, sm = m === 12 ? 1 : m + 1;
+      return { start: sy + '-' + pad(sm) + '-01', end: mEnd(e) };
     }
-    return parts.length ? '<div class="learn"><b style="font-size:12.5px">次から自動で読めるように</b>' + parts.join('') + '</div>' : '';
+    if (kind === 'year') { var yy = v('p-year'); return /^\d{4}$/.test(yy) ? { start: yy + '-01-01', end: yy + '-12-31' } : null; }
+    if (kind === 'date') { var d = v('p-date'); return d ? { start: d, end: d } : null; }
+    return null;
+  }
+  function clientCodeOf(text) {
+    var code = String(text || '').trim().split(/\s+/)[0];
+    return (info.clients || []).some(function (c) { return String(c.code) === code; }) ? code : '';
   }
 
   function renderReview() {
     var it = reviewItems.filter(function (x) { return x.file === current; })[0];
-    var list = reviewItems.map(function (x) {
+    var pos = reviewItems.indexOf(it);
+    var clientNow = (info.clients || []).filter(function (c) { return String(c.code) === String(it.clientCode); })[0];
+    var queue = reviewItems.map(function (x) {
       return '<li><button type="button" data-file="' + esc(x.file) + '" aria-current="' + (x.file === current) + '">' +
-        '<span>' + pill(x.status) + ' ' + esc(x.originalName) + '</span><small>' + esc(x.memo || '確認が必要です') + '</small></button></li>';
+        '<span>' + pill(x.status) + '</span><span class="name">' + esc(x.originalName) + '</span><span class="why">' + esc(x.memo || '確認が必要です') + '</span></button></li>';
     }).join('');
-    $('review').innerHTML = '<div class="review"><ul class="review-list">' + list + '</ul><div class="review-body">' +
-      '<iframe title="PDFの中身" src="/api/pdf?file=' + encodeURIComponent(it.file) + '"></iframe>' +
-      '<div class="form">' +
-      (it.memo ? '<div class="memo">' + esc(it.memo) + '</div>' : '') +
-      '<label for="f-type">書類種別<select id="f-type">' + options(info.docTypes, it.docType) + '</select></label>' +
-      '<label for="f-client">顧問先<select id="f-client">' + options(info.clients, it.clientCode) + '</select></label>' +
-      '<label for="f-start">対象期間(開始)<input id="f-start" type="date" value="' + esc(it.periodStart) + '"></label>' +
-      '<label for="f-end">対象期間(終了)<input id="f-end" type="date" value="' + esc(it.periodEnd) + '"></label>' +
-      learnBlock(it) +
-      '<div class="btns"><button type="button" class="primary" id="btn-confirm">確定して仕分ける</button>' +
-      '<button type="button" class="danger" id="btn-exclude">重複・不要として除外</button></div>' +
-      '<p class="hint" style="margin:0">「除外」は削除ではなく、「_重複(削除候補)」フォルダへ移すだけです。</p>' +
-      '</div></div></div>';
-    document.querySelectorAll('.review-list button').forEach(function (b) {
-      b.addEventListener('click', function () { current = b.getAttribute('data-file'); forceFile = null; msg('review-msg', '', true); renderReview(); });
-    });
-    $('btn-confirm').addEventListener('click', function () {
-      var body = { file: it.file, docType: $('f-type').value, clientCode: $('f-client').value, periodStart: $('f-start').value, periodEnd: $('f-end').value, force: forceFile === it.file,
-        learnTitle: !!($('learn-title') && $('learn-title').checked), learnAlias: $('learn-alias') && $('learn-alias').checked ? it.aliasCandidate : '' };
+    var types = (info.docTypes || []).map(function (t) { return '<option' + (t === it.docType ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('');
+    var learn = [];
+    // 覚える内容は、ほかの書類の自動仕分けにも影響するため、標準ではオフ(人が意識して選ぶ)
+    if (it.title) learn.push('<label><input id="learn-title" type="checkbox"> 表題「' + esc(it.title) + '」を、選んだ書類種別の目印として覚える</label>');
+    if (it.aliasCandidate) learn.push('<label><input id="learn-alias" type="checkbox"> 「' + esc(it.aliasCandidate) + '」を、選んだ顧問先の別名として覚える</label>');
+
+    $('review').innerHTML = '<div class="review">' +
+      '<section class="card queue" aria-label="要確認の一覧"><div class="card-head"><h2>残り ' + reviewItems.length + ' 件</h2></div><ol>' + queue + '</ol></section>' +
+      '<section class="card viewer" aria-label="PDF"><div class="viewer-bar"><span>' + esc(it.originalName) + '(' + (pos + 1) + ' / ' + reviewItems.length + ')</span>' +
+        '<a href="/api/pdf?file=' + encodeURIComponent(it.file) + '" target="_blank" rel="noopener">新しいタブで開く</a></div>' +
+        '<iframe title="PDFの中身" src="/api/pdf?file=' + encodeURIComponent(it.file) + '#view=FitH"></iframe></section>' +
+      '<section class="card form" aria-label="内容の入力"><div class="form-body">' +
+        (it.memo ? '<div class="reason"><b>確認が必要な理由</b>' + esc(it.memo) + '</div>' : '') +
+        '<label class="field" for="f-type"><span>書類種別</span><select id="f-type"><option value="">選んでください</option>' + types + '</select></label>' +
+        '<label class="field" for="f-client"><span>顧問先</span><input id="f-client" list="client-list" autocomplete="off" placeholder="コードか名前を入力して選ぶ" value="' + esc(clientNow ? clientNow.code + ' ' + clientNow.name : '') + '"><span class="sub" id="f-client-note"></span></label>' +
+        '<div class="field"><span>対象期間</span><div id="f-period"></div></div>' +
+        '<div class="dest" id="f-dest"><span class="hint">仕分け先</span><span class="mono" id="f-dest-text">入力すると、ここに仕分け先が表示されます</span></div>' +
+        (learn.length ? '<div class="learn"><b>次から自動で読めるように(同じ帳票がいつも同じ種別・顧問先のときだけ選んでください)</b>' + learn.join('') + '</div>' : '') +
+      '</div><div class="form-foot">' +
+        '<div class="row"><button type="button" class="primary" id="btn-confirm" disabled>確定して次へ</button></div>' +
+        '<div class="row"><span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd>でも確定</span><button type="button" class="quiet" id="btn-exclude">重複・不要として除外</button></div>' +
+        '<div class="inline-confirm" id="exclude-confirm" hidden>「削除候補」フォルダへ移します(削除はしません)<button type="button" class="danger" id="btn-exclude-yes">除外する</button><button type="button" id="btn-exclude-no">やめる</button></div>' +
+      '</div></section></div>';
+
+    var renderPeriod = function (keepValues) {
+      var kind = info.docTypeKinds[$('f-type').value];
+      var cur = keepValues ? readPeriod(kind) : null;
+      $('f-period').innerHTML = periodControl(kind, cur ? cur.start : it.periodStart, cur ? cur.end : it.periodEnd);
+      $('f-period').querySelectorAll('input').forEach(function (el) { el.addEventListener('input', update); el.addEventListener('change', update); });
+      if ($('p-multi')) $('p-multi').addEventListener('change', function () { $('p-to-wrap').hidden = !$('p-multi').checked; update(); });
+    };
+    var timer;
+    var update = function () {
+      var kind = info.docTypeKinds[$('f-type').value];
+      var p = readPeriod(kind);
+      var code = clientCodeOf($('f-client').value);
+      $('f-client-note').textContent = $('f-client').value && !code ? '顧問先マスタに無い顧問先です。一覧から選んでください' : '';
+      $('f-client-note').className = 'sub' + ($('f-client').value && !code ? ' ng' : '');
+      var ready = $('f-type').value && code && p && !p.error;
+      $('btn-confirm').disabled = !ready;
+      $('f-dest').className = 'dest';
+      if (p && p.error) { $('f-dest-text').textContent = p.error; return; }
+      if (!ready) { $('f-dest-text').textContent = '書類種別・顧問先・対象期間を入れると、仕分け先が表示されます'; return; }
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        var q = '?docType=' + encodeURIComponent($('f-type').value) + '&clientCode=' + encodeURIComponent(code) + '&periodStart=' + p.start + '&periodEnd=' + p.end;
+        api('GET', '/api/suggest' + q).then(function (r) {
+          if (!r.ready) return;
+          $('f-dest').className = 'dest ready';
+          $('f-dest-text').textContent = r.folder + ' / ' + r.fileName;
+        }).catch(function () {});
+      }, 150);
+    };
+    var confirm = function () {
+      if ($('btn-confirm').disabled) return;
+      var kind = info.docTypeKinds[$('f-type').value];
+      var p = readPeriod(kind);
+      var body = { file: it.file, docType: $('f-type').value, clientCode: clientCodeOf($('f-client').value), periodStart: p.start, periodEnd: p.end,
+        force: forceFile === it.file, learnTitle: !!($('learn-title') && $('learn-title').checked), learnAlias: $('learn-alias') && $('learn-alias').checked ? it.aliasCandidate : '' };
+      $('btn-confirm').disabled = true;
       api('POST', '/api/confirm', body).then(function (r) {
-        if (r.needsForce) { forceFile = it.file; msg('review-msg', r.message, false); return; }
+        if (r.needsForce) { forceFile = it.file; toast(r.message, true); $('btn-confirm').disabled = false; $('btn-confirm').textContent = '別の書類として確定'; return; }
         forceFile = null;
-        msg('review-msg', r.message, true);
-        return loadReview();
-      }).catch(function (e) { msg('review-msg', e.message, false); });
+        toast(r.message);
+        current = reviewItems[pos + 1] ? reviewItems[pos + 1].file : null; // 次の書類へ
+        return Promise.all([loadReview(), loadStatus()]);
+      }).catch(function (e) { toast(e.message, true); $('btn-confirm').disabled = false; });
+    };
+
+    document.querySelectorAll('.queue li button').forEach(function (b) {
+      b.addEventListener('click', function () { current = b.getAttribute('data-file'); forceFile = null; renderReview(); });
     });
-    $('btn-exclude').addEventListener('click', function () {
-      api('POST', '/api/exclude', { file: it.file }).then(function (r) { msg('review-msg', r.message, true); return loadReview(); })
-        .catch(function (e) { msg('review-msg', e.message, false); });
+    $('f-type').addEventListener('change', function () { renderPeriod(false); update(); });
+    $('f-client').addEventListener('input', update);
+    $('btn-confirm').addEventListener('click', confirm);
+    $('btn-exclude').addEventListener('click', function () { $('exclude-confirm').hidden = false; });
+    $('btn-exclude-no').addEventListener('click', function () { $('exclude-confirm').hidden = true; });
+    $('btn-exclude-yes').addEventListener('click', function () {
+      api('POST', '/api/exclude', { file: it.file }).then(function (r) {
+        toast(r.message);
+        current = reviewItems[pos + 1] ? reviewItems[pos + 1].file : null;
+        return Promise.all([loadReview(), loadStatus()]);
+      }).catch(function (e) { toast(e.message, true); });
     });
+    $('review').onkeydown = function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); confirm(); } };
+    renderPeriod(false);
+    update();
   }
 
-  // ---------- タブ ----------
-  function showTab(which) {
-    var main = which === 'main';
-    $('tab-main').setAttribute('aria-selected', String(main));
-    $('tab-settings').setAttribute('aria-selected', String(!main));
-    $('view-main').hidden = !main;
-    $('view-settings').hidden = main;
-    if (!main) { loadSettings(); if (!$('users-panel').hidden) loadUsers(); }
+  // ---------- 記録 ----------
+  var recTimer;
+  function loadRecords() {
+    var q = '?q=' + encodeURIComponent($('r-q').value) + '&status=' + encodeURIComponent($('r-status').value) + '&month=' + encodeURIComponent($('r-month').value);
+    api('GET', '/api/records' + q).then(function (r) {
+      if (!r.items.length) { $('records').innerHTML = '<p class="hint" style="padding:16px;margin:0">条件に合う記録はありません。</p>'; return; }
+      $('records').innerHTML = '<div class="scroll"><table><thead><tr><th>処理日時</th><th>状態</th><th>顧問先</th><th>書類種別</th><th>対象期間</th><th>ファイル名</th><th></th></tr></thead><tbody>' +
+        r.items.map(function (x, i) {
+          return '<tr><td class="nowrap mono" style="font-size:12px">' + esc(x.at.slice(0, 16)) + '</td><td>' + pill(x.status) + '</td>' +
+            '<td>' + esc((x.clientCode ? x.clientCode + ' ' : '') + (x.clientName || '―')) + '</td><td>' + esc(x.docType || '―') + '</td>' +
+            '<td class="nowrap">' + esc(period(x.periodStart, x.periodEnd, x.docType)) + '</td>' +
+            '<td class="file">' + esc(x.fileName) + '<div class="hint">' + esc(x.folder) + '</div></td>' +
+            '<td>' + (x.fullPath ? '<button type="button" class="copy" data-i="' + i + '">場所をコピー</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' + (r.items.length >= 200 ? '<p class="hint" style="padding:8px 16px;margin:0">新しい順に200件まで表示しています。条件で絞り込んでください。</p>' : '');
+      document.querySelectorAll('#records .copy').forEach(function (b) {
+        b.addEventListener('click', function () { copyText(r.items[+b.getAttribute('data-i')].fullPath); });
+      });
+    }).catch(function (e) { toast(e.message, true); });
   }
+  $('r-q').addEventListener('input', function () { clearTimeout(recTimer); recTimer = setTimeout(loadRecords, 250); });
+  $('r-status').addEventListener('change', loadRecords);
+  $('r-month').addEventListener('change', loadRecords);
+  $('r-clear').addEventListener('click', function () { $('r-q').value = ''; $('r-status').value = 'filed'; $('r-month').value = ''; loadRecords(); });
 
   // ---------- ログアウト・パスワード変更 ----------
-  $('btn-logout').addEventListener('click', function () {
-    api('POST', '/api/logout', {}).then(function () { location.href = '/'; });
-  });
+  $('btn-logout').addEventListener('click', function () { api('POST', '/api/logout', {}).then(function () { location.href = '/'; }); });
   $('btn-pw').addEventListener('click', function () { $('pw-panel').hidden = false; $('pw-cur').focus(); });
   $('btn-pw-cancel').addEventListener('click', function () { $('pw-panel').hidden = true; });
   $('btn-pw-save').addEventListener('click', function () {
     api('POST', '/api/password', { current: $('pw-cur').value, next: $('pw-new').value }).then(function (r) {
-      $('pw-msg').textContent = r.message; $('pw-cur').value = ''; $('pw-new').value = '';
-    }).catch(function (e) { $('pw-msg').textContent = e.message; });
+      toast(r.message); $('pw-cur').value = ''; $('pw-new').value = ''; $('pw-panel').hidden = true;
+    }).catch(function (e) { toast(e.message, true); });
   });
 
   // ---------- 利用者の管理(管理者だけ)----------
   function loadUsers() {
     api('GET', '/api/users').then(function (r) {
       $('u-list').innerHTML = r.users.length ? r.users.map(function (u) {
-        return '<tr data-id="' + esc(u.id) + '"><td>' + esc(u.id) + '</td><td>' + esc(u.name) + '</td>' +
+        return '<tr data-id="' + esc(u.id) + '"><td class="mono">' + esc(u.id) + '</td><td>' + esc(u.name) + '</td>' +
           '<td><select class="u-role" aria-label="権限">' + Object.keys(r.roles).map(function (k) { return '<option value="' + k + '"' + (u.role === k ? ' selected' : '') + '>' + esc(r.roles[k]) + '</option>'; }).join('') + '</select></td>' +
           '<td><input type="checkbox" class="u-on" aria-label="使える"' + (u.disabled ? '' : ' checked') + '></td>' +
-          '<td><div class="btns"><input type="password" class="u-newpw" aria-label="新しいパスワード" placeholder="新しいパスワード" autocomplete="new-password"><button type="button" class="u-setpw">再設定</button></div></td></tr>';
+          '<td><div class="chips"><input type="password" class="u-newpw" aria-label="新しいパスワード" placeholder="新しいパスワード" autocomplete="new-password"><button type="button" class="u-setpw">再設定</button></div></td></tr>';
       }).join('') : '<tr><td colspan="5" class="hint">まだ利用者がいません。下の欄から、まず管理者を1人追加してください。</td></tr>';
       document.querySelectorAll('#u-list tr[data-id]').forEach(function (tr) {
         var id = tr.getAttribute('data-id');
-        var update = function (changes) {
+        var upd = function (changes) {
           api('POST', '/api/users', { action: 'update', id: id, changes: changes })
-            .then(function (x) { $('u-msg').textContent = x.message; loadUsers(); })
-            .catch(function (e) { $('u-msg').textContent = e.message; loadUsers(); });
+            .then(function (x) { toast(x.message); loadUsers(); })
+            .catch(function (e) { toast(e.message, true); loadUsers(); });
         };
-        tr.querySelector('.u-role').addEventListener('change', function (e) { update({ role: e.target.value }); });
-        tr.querySelector('.u-on').addEventListener('change', function (e) { update({ disabled: !e.target.checked }); });
-        tr.querySelector('.u-setpw').addEventListener('click', function () { update({ password: tr.querySelector('.u-newpw').value }); });
+        tr.querySelector('.u-role').addEventListener('change', function (e) { upd({ role: e.target.value }); });
+        tr.querySelector('.u-on').addEventListener('change', function (e) { upd({ disabled: !e.target.checked }); });
+        tr.querySelector('.u-setpw').addEventListener('click', function () { upd({ password: tr.querySelector('.u-newpw').value }); });
       });
-    }).catch(function (e) { $('u-msg').textContent = e.message; });
+    }).catch(function (e) { toast(e.message, true); });
   }
   $('btn-u-add').addEventListener('click', function () {
     api('POST', '/api/users', { action: 'add', user: { id: $('u-id').value, name: $('u-name').value, role: $('u-role').value, password: $('u-pw').value } })
-      .then(function (r) { $('u-msg').textContent = r.message; $('u-id').value = ''; $('u-name').value = ''; $('u-pw').value = ''; loadUsers(); })
-      .catch(function (e) { $('u-msg').textContent = e.message; });
+      .then(function (r) { toast(r.message); $('u-id').value = ''; $('u-name').value = ''; $('u-pw').value = ''; loadUsers(); })
+      .catch(function (e) { toast(e.message, true); });
   });
-  $('tab-main').addEventListener('click', function () { showTab('main'); });
-  $('tab-settings').addEventListener('click', function () { showTab('settings'); });
 
   // ---------- 設定 ----------
   var settings = null;
   var PLACEHOLDERS = ['{顧問先}', '{顧問先コード}', '{顧問先名}', '{年度}', '{期間}', '{書類種別}'];
   var lastNamingInput = null;
-
   function clientRow(c) {
     return '<tr><td><input type="text" class="c-code" value="' + esc(c.code || '') + '" aria-label="顧問先コード"></td>' +
       '<td><input type="text" class="c-name" value="' + esc(c.name || '') + '" aria-label="顧問先名"></td>' +
       '<td><input type="text" class="c-alias" value="' + esc((c.aliases || []).join('、')) + '" aria-label="別名"></td>' +
       '<td><select class="c-fem" aria-label="決算月"><option value="">―</option>' +
       [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(function (m) { return '<option value="' + m + '"' + (+c.fiscalEndMonth === m ? ' selected' : '') + '>' + m + '月</option>'; }).join('') +
-      '</select></td><td><button type="button" class="c-del">削除</button></td></tr>';
+      '</select></td><td><button type="button" class="quiet c-del">削除</button></td></tr>';
   }
   function typeRow(t) {
     var kinds = settings.periodKinds;
-    return '<tr data-builtin="' + (t.builtIn ? '1' : '') + '"><td><input type="checkbox" class="t-on"' + (t.enabled ? ' checked' : '') + ' aria-label="使う"></td>' +
+    return '<tr><td><input type="checkbox" class="t-on"' + (t.enabled ? ' checked' : '') + ' aria-label="使う"></td>' +
       '<td>' + (t.builtIn ? esc(t.name) + '<input type="hidden" class="t-name" value="' + esc(t.name) + '">' : '<input type="text" class="t-name" value="' + esc(t.name) + '" aria-label="書類種別の名前">') + '</td>' +
       '<td>' + (t.builtIn ? esc(kinds[t.periodKind] || '') : '<select class="t-kind" aria-label="期間の種類">' + Object.keys(kinds).map(function (k) {
         return '<option value="' + k + '"' + (t.periodKind === k ? ' selected' : '') + '>' + esc(kinds[k]) + '</option>'; }).join('') + '</select>') + '</td>' +
       '<td><input type="text" class="t-words" value="' + esc((t.extraTitleWords || []).join('、')) + '" aria-label="表題の目印"></td></tr>';
   }
-  function bindRows() {
-    document.querySelectorAll('.c-del').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; });
-  }
+  function bindRows() { document.querySelectorAll('.c-del').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; }); }
   function preview() {
     var q = '?folder=' + encodeURIComponent($('s-folder').value) + '&file=' + encodeURIComponent($('s-file').value);
-    api('GET', '/api/naming-preview' + q).then(function (r) {
-      $('naming-preview').textContent = '見本:' + r.folder + ' / ' + r.file;
-    }).catch(function () {});
+    api('GET', '/api/naming-preview' + q).then(function (r) { $('naming-preview').textContent = '見本:' + r.folder + ' / ' + r.file; }).catch(function () {});
   }
   function loadSettings() {
     api('GET', '/api/settings').then(function (s) {
@@ -515,14 +731,13 @@ table.edit input, table.edit select { width: 100%; }
           var el = lastNamingInput || $('s-file');
           var pos = el.selectionStart == null ? el.value.length : el.selectionStart;
           var before = el.value.slice(0, pos);
-          // 項目の間に区切り(ファイル名は「_」、フォルダは「/」)を自動で入れる
           var sep = before && !/[_\/\-]$/.test(before) ? (el.id === 's-folder' ? '/' : '_') : '';
           el.value = before + sep + b.getAttribute('data-ph') + el.value.slice(el.selectionEnd == null ? pos : el.selectionEnd);
           el.focus(); preview();
         };
       });
       bindRows(); preview();
-    }).catch(function (e) { $('save-msg').textContent = e.message; });
+    }).catch(function (e) { toast(e.message, true); });
   }
   ['s-folder', 's-file'].forEach(function (id) {
     $(id).addEventListener('input', preview);
@@ -532,10 +747,9 @@ table.edit input, table.edit select { width: 100%; }
   $('btn-add-type').addEventListener('click', function () {
     $('s-types').insertAdjacentHTML('beforeend', typeRow({ name: '', builtIn: false, periodKind: 'month', extraTitleWords: [], enabled: true }));
   });
-  // 顧問先マスタのCSVを読み込む(読み込みはこのパソコンの中だけ)
   function parseCsv(text) {
     var rows = [], row = [], cell = '', q = false;
-    text = text.replace(/^\uFEFF/, '');
+    text = text.replace(/^﻿/, '');
     for (var i = 0; i < text.length; i++) {
       var ch = text[i];
       if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
@@ -565,13 +779,11 @@ table.edit input, table.edit select { width: 100%; }
   });
   $('btn-save').addEventListener('click', function () {
     var clients = Array.prototype.map.call(document.querySelectorAll('#s-clients tr'), function (tr) {
-      return { code: tr.querySelector('.c-code').value, name: tr.querySelector('.c-name').value,
-        aliases: tr.querySelector('.c-alias').value, fiscalEndMonth: tr.querySelector('.c-fem').value };
+      return { code: tr.querySelector('.c-code').value, name: tr.querySelector('.c-name').value, aliases: tr.querySelector('.c-alias').value, fiscalEndMonth: tr.querySelector('.c-fem').value };
     });
     var docTypes = Array.prototype.map.call(document.querySelectorAll('#s-types tr'), function (tr) {
       var kind = tr.querySelector('.t-kind');
-      return { name: tr.querySelector('.t-name').value, enabled: tr.querySelector('.t-on').checked,
-        periodKind: kind ? kind.value : '', extraTitleWords: tr.querySelector('.t-words').value };
+      return { name: tr.querySelector('.t-name').value, enabled: tr.querySelector('.t-on').checked, periodKind: kind ? kind.value : '', extraTitleWords: tr.querySelector('.t-words').value };
     });
     var body = { settings: {
       office: { name: $('s-office').value }, inbox: $('s-inbox').value, archive: $('s-archive').value,
@@ -582,13 +794,17 @@ table.edit input, table.edit select { width: 100%; }
     $('save-msg').textContent = '保存しています…';
     api('POST', '/api/settings', body).then(function (r) {
       $('save-msg').textContent = r.message + (r.notes && r.notes.length ? '。' + r.notes.join('。') : '');
+      toast(r.message);
       return loadStatus().then(loadSettings);
-    }).catch(function (e) { $('save-msg').textContent = e.message; });
+    }).catch(function (e) { $('save-msg').textContent = e.message; toast(e.message, true); });
   });
 
-  loadStatus();
-  loadReview();
-  setInterval(loadStatus, 60000);
+  // ---------- はじめに ----------
+  loadStatus().then(function () {
+    showView(location.hash.slice(1) || 'review');
+    return loadReview();
+  });
+  setInterval(function () { loadStatus(); if (!$('view-review').hidden && !document.activeElement.closest('.form')) loadReview(); }, 60000);
 })();
 </script>
 </body>
