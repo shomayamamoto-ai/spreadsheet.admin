@@ -2,3 +2,4 @@ node_modules/
 __pycache__/
 work/
 local/config.json
+preview/_local_preview.html

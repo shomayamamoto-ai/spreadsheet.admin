@@ -11,7 +11,8 @@
     "local:app": "node local/server.js --config local/config.json",
     "evaluate": "node local/evaluate.js",
     "doctor": "node local/doctor.js",
-    "report": "node local/report.js"
+    "report": "node local/report.js",
+    "preview": "node scripts/build-preview.js && node -e \"require('fs').mkdirSync('preview/samples',{recursive:true});for(const f of require('fs').readdirSync('demo/samples'))require('fs').copyFileSync('demo/samples/'+f,'preview/samples/'+f)\""
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

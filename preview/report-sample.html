@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>導入効果レポート</title><style>
+:root { color-scheme: light;
+  --paper: #f4f7f5; --surface: #ffffff; --ink: #1c2923; --muted: #56675e; --rule: #dbe5df; --grid: #e8eeea;
+  --accent: #1d6a50; --s-auto: #2a78d6; --s-human: #eb6834; --good: #1d6a50; --bad: #b3261e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark;
+  --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3; --rule: #2b3a33; --grid: #223029;
+  --accent: #62c39a; --s-auto: #3987e5; --s-human: #d95926; --good: #62c39a; --bad: #f28b82; } }
+:root[data-theme="dark"] { color-scheme: dark;
+  --paper: #111815; --surface: #18211d; --ink: #e2ebe6; --muted: #9bada3; --rule: #2b3a33; --grid: #223029;
+  --accent: #62c39a; --s-auto: #3987e5; --s-human: #d95926; --good: #62c39a; --bad: #f28b82; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14.5px/1.8 "LINE Seed JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif; padding: 0 16px 48px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 18px; }
+header { padding: 28px 0 14px; border-bottom: 2px solid var(--accent); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 16px; }
+h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: .04em; font-feature-settings: "palt"; }
+h2 { margin: 0 0 10px; font-size: 16px; font-weight: 800; }
+.sub { color: var(--muted); font-size: 13px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.tile em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); }
+.tile strong { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 28px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.tile small { font-size: 13px; margin-left: 2px; }
+.tile .note { display: block; font-size: 11.5px; color: var(--muted); }
+section.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.chart { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .val { fill: var(--ink); font-size: 11px; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font-size: 12px; line-height: 1.6; padding: 6px 10px; border-radius: 4px; white-space: nowrap; transform: translate(-50%, calc(-100% - 8px)); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--rule); padding: 6px 10px; text-align: left; }
+th { color: var(--muted); font-weight: 700; white-space: nowrap; }
+td.n { text-align: right; font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 10px; }
+.ok { color: var(--good); font-weight: 700; } .ng { color: var(--bad); font-weight: 700; }
+footer { color: var(--muted); font-size: 12px; line-height: 1.9; }
+@media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style></head>
+<body><div class="wrap">
+<header><div><h1>導入効果レポート</h1><div class="sub">みどり会計事務所(架空・サンプルデータ)</div></div><div class="sub">作成日 2026/11/10</div></header>
+<div class="tiles">
+  <div class="tile"><em>処理した書類</em><strong>1,308</strong><small>件</small><span class="note">2026-05 〜 2026-10</span></div>
+  <div class="tile"><em>自動で仕分けた割合</em><strong>80.5</strong><small>%</small><span class="note">1,053件を人の手を使わずに仕分け</span></div>
+  <div class="tile"><em>削減できた時間(目安)</em><strong>26.3</strong><small>時間</small><span class="note">1件1.5分として計算(仮定)</span></div>
+  <div class="tile"><em>人が確認した書類</em><strong>255</strong><small>件</small><span class="note">うち確定 212件・除外 0件</span></div>
+</div>
+<section class="card"><h2>月ごとの処理件数</h2><div class="legend"><span><i style="background:var(--s-auto)"></i>自動で仕分け</span><span><i style="background:var(--s-human)"></i>人が確認(要確認・重複の疑い・エラー)</span></div>
+<div class="chart"><svg viewBox="0 0 920 260" role="img" aria-label="月ごとの処理件数"><line x1="44" x2="912" y1="230" y2="230" stroke="var(--grid)" stroke-width="1"/><text x="38" y="234" text-anchor="end">0</text><line x1="44" x2="912" y1="158.66666666666669" y2="158.66666666666669" stroke="var(--grid)" stroke-width="1"/><text x="38" y="162.66666666666669" text-anchor="end">100</text><line x1="44" x2="912" y1="87.33333333333334" y2="87.33333333333334" stroke="var(--grid)" stroke-width="1"/><text x="38" y="91.33333333333334" text-anchor="end">200</text><line x1="44" x2="912" y1="16" y2="16" stroke="var(--grid)" stroke-width="1"/><text x="38" y="20" text-anchor="end">300</text><line x1="44" x2="912" y1="230" y2="230" stroke="var(--muted)" stroke-width="1"/><g tabindex="0" data-tip="2026-05&lt;br&gt;自動で仕分け 123件&lt;br&gt;人が確認 57件&lt;br&gt;自動の割合 68.3%"><rect x="44" y="16" width="144.66666666666666" height="214" fill="transparent"/><rect x="93.33333333333333" y="142.26000000000002" width="46" height="87.73999999999998" fill="var(--s-auto)"/><path d="M93.33333333333333,140.26000000000002 V105.60000000000001 Q93.33333333333333,101.60000000000001 97.33333333333333,101.60000000000001 H135.33333333333331 Q139.33333333333331,101.60000000000001 139.33333333333331,105.60000000000001 V140.26000000000002 Z" fill="var(--s-human)"/><text class="val" x="116.33333333333333" y="96.60000000000001" text-anchor="middle">180</text><text x="116.33333333333333" y="250" text-anchor="middle">26/05</text></g><g tabindex="0" data-tip="2026-06&lt;br&gt;自動で仕分け 146件&lt;br&gt;人が確認 39件&lt;br&gt;自動の割合 78.9%"><rect x="188.66666666666666" y="16" width="144.66666666666666" height="214" fill="transparent"/><rect x="238" y="125.85333333333332" width="46" height="104.14666666666668" fill="var(--s-auto)"/><path d="M238,123.85333333333332 V102.03333333333333 Q238,98.03333333333333 242,98.03333333333333 H280 Q284,98.03333333333333 284,102.03333333333333 V123.85333333333332 Z" fill="var(--s-human)"/><text class="val" x="261" y="93.03333333333333" text-anchor="middle">185</text><text x="261" y="250" text-anchor="middle">26/06</text></g><g tabindex="0" data-tip="2026-07&lt;br&gt;自動で仕分け 200件&lt;br&gt;人が確認 55件&lt;br&gt;自動の割合 78.4%"><rect x="333.3333333333333" y="16" width="144.66666666666666" height="214" fill="transparent"/><rect x="382.66666666666663" y="87.33333333333334" width="46" height="142.66666666666666" fill="var(--s-auto)"/><path d="M382.66666666666663,85.33333333333334 V52.1 Q382.66666666666663,48.1 386.66666666666663,48.1 H424.66666666666663 Q428.66666666666663,48.1 428.66666666666663,52.1 V85.33333333333334 Z" fill="var(--s-human)"/><text class="val" x="405.66666666666663" y="43.1" text-anchor="middle">255</text><text x="405.66666666666663" y="250" text-anchor="middle">26/07</text></g><g tabindex="0" data-tip="2026-08&lt;br&gt;自動で仕分け 203件&lt;br&gt;人が確認 54件&lt;br&gt;自動の割合 79%"><rect x="478" y="16" width="144.66666666666666" height="214" fill="transparent"/><rect x="527.3333333333334" y="85.19333333333334" width="46" height="144.80666666666667" fill="var(--s-auto)"/><path d="M527.3333333333334,83.19333333333334 V50.67333333333333 Q527.3333333333334,46.67333333333333 531.3333333333334,46.67333333333333 H569.3333333333334 Q573.3333333333334,46.67333333333333 573.3333333333334,50.67333333333333 V83.19333333333334 Z" fill="var(--s-human)"/><text class="val" x="550.3333333333334" y="41.67333333333333" text-anchor="middle">257</text><text x="550.3333333333334" y="250" text-anchor="middle">26/08</text></g><g tabindex="0" data-tip="2026-09&lt;br&gt;自動で仕分け 196件&lt;br&gt;人が確認 35件&lt;br&gt;自動の割合 84.8%"><rect x="622.6666666666666" y="16" width="144.66666666666666" height="214" fill="transparent"/><rect x="672" y="90.18666666666667" width="46" height="139.81333333333333" fill="var(--s-auto)"/><path d="M672,88.18666666666667 V69.22 Q672,65.22 676,65.22 H714 Q718,65.22 718,69.22 V88.18666666666667 Z" fill="var(--s-human)"/><text class="val" x="695" y="60.22" text-anchor="middle">231</text><text x="695" y="250" text-anchor="middle">26/09</text></g><g tabindex="0" data-tip="2026-10&lt;br&gt;自動で仕分け 185件&lt;br&gt;人が確認 15件&lt;br&gt;自動の割合 92.5%"><rect x="767.3333333333333" y="16" width="144.66666666666666" height="214" fill="transparent"/><rect x="816.6666666666666" y="98.03333333333333" width="46" height="131.96666666666667" fill="var(--s-auto)"/><path d="M816.6666666666666,96.03333333333333 V91.33333333333334 Q816.6666666666666,87.33333333333334 820.6666666666666,87.33333333333334 H858.6666666666666 Q862.6666666666666,87.33333333333334 862.6666666666666,91.33333333333334 V96.03333333333333 Z" fill="var(--s-human)"/><text class="val" x="839.6666666666666" y="82.33333333333334" text-anchor="middle">200</text><text x="839.6666666666666" y="250" text-anchor="middle">26/10</text></g></svg><div class="tip" hidden></div></div><details><summary>表で見る(月ごとの件数)</summary><div class="scroll"><table><thead><tr><th>月</th><th>自動で仕分け</th><th>人が確認</th><th>合計</th><th>自動の割合</th><th>人が確定</th></tr></thead><tbody><tr><td>2026-05</td><td class="n">123</td><td class="n">57</td><td class="n">180</td><td class="n">68.3%</td><td class="n">47</td></tr><tr><td>2026-06</td><td class="n">146</td><td class="n">39</td><td class="n">185</td><td class="n">78.9%</td><td class="n">33</td></tr><tr><td>2026-07</td><td class="n">200</td><td class="n">55</td><td class="n">255</td><td class="n">78.4%</td><td class="n">44</td></tr><tr><td>2026-08</td><td class="n">203</td><td class="n">54</td><td class="n">257</td><td class="n">79%</td><td class="n">44</td></tr><tr><td>2026-09</td><td class="n">196</td><td class="n">35</td><td class="n">231</td><td class="n">84.8%</td><td class="n">31</td></tr><tr><td>2026-10</td><td class="n">185</td><td class="n">15</td><td class="n">200</td><td class="n">92.5%</td><td class="n">13</td></tr></tbody></table></div></details></section>
+<section class="card"><h2>書類種別ごとの件数</h2><div class="chart">
+  <div style="display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:10px;align-items:center;font-size:13px;margin:4px 0" tabindex="0" data-tip="月次試算表&lt;br&gt;469件(うち自動 386件)">
+    <span style="overflow-wrap:anywhere">月次試算表</span>
+    <span style="height:12px;background:var(--grid);border-radius:0 4px 4px 0"><span style="display:block;height:12px;width:100%;background:var(--s-auto);border-radius:0 4px 4px 0"></span></span>
+    <span style="text-align:right;font-variant-numeric:tabular-nums">469件</span>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:10px;align-items:center;font-size:13px;margin:4px 0" tabindex="0" data-tip="消費税申告書&lt;br&gt;165件(うち自動 134件)">
+    <span style="overflow-wrap:anywhere">消費税申告書</span>
+    <span style="height:12px;background:var(--grid);border-radius:0 4px 4px 0"><span style="display:block;height:12px;width:35.18123667377399%;background:var(--s-auto);border-radius:0 4px 4px 0"></span></span>
+    <span style="text-align:right;font-variant-numeric:tabular-nums">165件</span>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:10px;align-items:center;font-size:13px;margin:4px 0" tabindex="0" data-tip="法人税申告書&lt;br&gt;164件(うち自動 131件)">
+    <span style="overflow-wrap:anywhere">法人税申告書</span>
+    <span style="height:12px;background:var(--grid);border-radius:0 4px 4px 0"><span style="display:block;height:12px;width:34.9680170575693%;background:var(--s-auto);border-radius:0 4px 4px 0"></span></span>
+    <span style="text-align:right;font-variant-numeric:tabular-nums">164件</span>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:10px;align-items:center;font-size:13px;margin:4px 0" tabindex="0" data-tip="請求書&lt;br&gt;160件(うち自動 135件)">
+    <span style="overflow-wrap:anywhere">請求書</span>
+    <span style="height:12px;background:var(--grid);border-radius:0 4px 4px 0"><span style="display:block;height:12px;width:34.11513859275053%;background:var(--s-auto);border-radius:0 4px 4px 0"></span></span>
+    <span style="text-align:right;font-variant-numeric:tabular-nums">160件</span>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:10px;align-items:center;font-size:13px;margin:4px 0" tabindex="0" data-tip="源泉所得税納付書&lt;br&gt;160件(うち自動 132件)">
+    <span style="overflow-wrap:anywhere">源泉所得税納付書</span>
+    <span style="height:12px;background:var(--grid);border-radius:0 4px 4px 0"><span style="display:block;height:12px;width:34.11513859275053%;background:var(--s-auto);border-radius:0 4px 4px 0"></span></span>
+    <span style="text-align:right;font-variant-numeric:tabular-nums">160件</span>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:10px;align-items:center;font-size:13px;margin:4px 0" tabindex="0" data-tip="決算書&lt;br&gt;147件(うち自動 135件)">
+    <span style="overflow-wrap:anywhere">決算書</span>
+    <span style="height:12px;background:var(--grid);border-radius:0 4px 4px 0"><span style="display:block;height:12px;width:31.343283582089555%;background:var(--s-auto);border-radius:0 4px 4px 0"></span></span>
+    <span style="text-align:right;font-variant-numeric:tabular-nums">147件</span>
+  </div><div class="tip" hidden></div></div></section>
+<p class="sub">※ 「削減できた時間」は、自動で仕分けた件数 × 1件あたりの仕分け時間(1.5分と仮定)で計算した目安です。実際の作業時間で置き換えてお使いください。</p>
+<footer>PDF仕分けアシスタント|このレポートは、事務所のパソコンの中だけで作成しています(外部への送信はありません)。</footer>
+</div><script>
+document.querySelectorAll('.chart').forEach(function (box) {
+  var tip = box.querySelector('.tip');
+  box.querySelectorAll('[data-tip]').forEach(function (g) {
+    var show = function () {
+      var r = g.getBoundingClientRect(), b = box.getBoundingClientRect();
+      tip.innerHTML = g.getAttribute('data-tip'); tip.hidden = false;
+      tip.style.left = (r.left - b.left + r.width / 2) + 'px'; tip.style.top = (r.top - b.top) + 'px';
+    };
+    g.addEventListener('mouseenter', show); g.addEventListener('focus', show);
+    g.addEventListener('mouseleave', function () { tip.hidden = true; }); g.addEventListener('blur', function () { tip.hidden = true; });
+  });
+});</script></body></html>

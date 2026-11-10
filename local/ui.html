@@ -380,18 +380,21 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
 
   // ---------- 画面の切り替え(アドレスの #review などで、開く画面を覚える)----------
   var VIEWS = ['review', 'sort', 'records', 'settings'];
+  // アドレスの「#」の名前(設定は #config。#settings は使えない場面があるため)
+  var hashOf = function (v) { return v === 'settings' ? 'config' : v; };
+  var viewOf = function (h) { return h === 'config' ? 'settings' : h; };
   function showView(v) {
     if (VIEWS.indexOf(v) < 0 || ($('tab-' + v) && $('tab-' + v).hidden)) v = 'review';
     VIEWS.forEach(function (x) {
       $('view-' + x).hidden = x !== v;
       $('tab-' + x).setAttribute('aria-selected', String(x === v));
     });
-    if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
+    if (location.hash !== '#' + hashOf(v)) history.replaceState(null, '', '#' + hashOf(v));
     if (v === 'records') loadRecords();
     if (v === 'settings') { loadSettings(); if (!$('users-panel').hidden) loadUsers(); }
   }
   VIEWS.forEach(function (v) { $('tab-' + v).addEventListener('click', function () { showView(v); }); });
-  window.addEventListener('hashchange', function () { showView(location.hash.slice(1)); });
+  window.addEventListener('hashchange', function () { showView(viewOf(location.hash.slice(1))); });
 
   // ---------- 状態 ----------
   function loadStatus() {
@@ -801,7 +804,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
 
   // ---------- はじめに ----------
   loadStatus().then(function () {
-    showView(location.hash.slice(1) || 'review');
+    showView(viewOf(location.hash.slice(1)) || 'review');
     return loadReview();
   });
   setInterval(function () { loadStatus(); if (!$('view-review').hidden && !document.activeElement.closest('.form')) loadReview(); }, 60000);
