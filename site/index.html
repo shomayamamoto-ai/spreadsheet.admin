@@ -256,6 +256,8 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
       <div class="card"><h3>重複と保存漏れに気づく</h3><p>同じ顧問先・書類種別・期間の書類を二重に保存すると「重複の疑い」で止めます。顧問先ごとの保存状況から、未保存の書類も分かります。</p></div>
       <div class="card"><h3>スキャンした紙の書類</h3><p>画像だけのPDFも、パソコン内の画像を読めるAIで文字起こしします。読み間違いに備え、項目を入力した状態で「要確認」にして人が確定します。</p></div>
       <div class="card"><h3>事務所に合わせる設定</h3><p>フォルダ名・ファイル名の付け方、顧問先マスタ(CSV読み込み)、独自の書類種別を、見本を見ながら画面で設定できます。</p></div>
+      <div class="card"><h3>職員のパソコンから使える</h3><p>処理用のパソコン1台で仕分けを動かし、職員は自分のパソコンのブラウザから使います。職員ごとのID・権限(管理者/職員)があり、誰が何をしたかが記録に残ります。</p></div>
+      <div class="card"><h3>あとから探せる</h3><p>仕分けた書類を、顧問先・書類種別・月で検索できます。保存場所をコピーして、すぐに開けます。</p></div>
       <div class="card"><h3>精度を数字で測る</h3><p>実際のPDFと正解表を比べ、「誤って自動で仕分けた件数」「要確認の割合」を測ります。測定中はファイルを動かしません。</p></div>
     </div>
 
@@ -269,6 +271,7 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
           <tr><th scope="row">外部への送信</th><td class="yes">なし(通信先をこのパソコンに限定)</td><td class="yes">なし(外部と通信する権限を付けない)</td></tr>
           <tr><th scope="row">スキャンした書類</th><td>パソコン内のAIで文字起こし</td><td>要確認に回る</td></tr>
           <tr><th scope="row">一覧表</th><td>書類一覧.csv(Excel・スプレッドシートで開ける)</td><td>スプレッドシートに自動で記録</td></tr>
+          <tr><th scope="row">複数の職員で使う</th><td>事務所内LANで、職員ごとのIDでログイン</td><td>Googleアカウントで共有</td></tr>
           <tr><th scope="row">必要なもの</th><td>メモリに余裕のあるパソコン、Node.js、Ollama</td><td>Google Workspace(法人向け)</td></tr>
         </tbody>
       </table>
