@@ -11,6 +11,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const BRAND = require('./brand.js');
 
 // ---------- 共通 ----------
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -81,7 +82,7 @@ function page(title, office, body) {
 <body><div class="wrap">
 <header><div><h1>${esc(title)}</h1><div class="sub">${esc(office || '')}</div></div><div class="sub">作成日 ${new Date().toLocaleDateString('ja-JP')}</div></header>
 ${body}
-<footer>PDF仕分けアシスタント|このレポートは、事務所のパソコンの中だけで作成しています(外部への送信はありません)。</footer>
+<footer>${esc(BRAND.name)}|このレポートは、事務所のパソコンの中だけで作成しています(外部への送信はありません)。</footer>
 </div><script>${TIP_SCRIPT}</script></body></html>`;
 }
 

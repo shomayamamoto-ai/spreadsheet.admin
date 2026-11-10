@@ -137,7 +137,7 @@ async function doctor(opts) {
 
 function print(results, log) {
   const mark = { ok: '✓', warn: '!', ng: '✗' };
-  log('PDF仕分けアシスタント 導入チェック\n');
+  log(`${require('./brand.js').name} 導入チェック\n`);
   for (const r of results) {
     log(`${mark[r.status]} ${r.name}:${r.detail}`);
     if (r.fix) log(`    → ${r.fix}`);

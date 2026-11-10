@@ -33,6 +33,7 @@ const { lockdownNetwork, isLoopbackHost, isPrivateAddress } = require('./guard.j
 const ST = require('./settings.js');
 const U = require('./users.js');
 const PdfText = require('../src/pdftext.js');
+const BRAND = require('./brand.js');
 
 const DUP_FOLDER = '_重複(削除候補)';
 const SESSION_IDLE_MS = 4 * 60 * 60 * 1000;     // 4時間操作が無ければログアウト
@@ -44,8 +45,10 @@ function createServer(configPath) {
   const cfg = () => S.loadConfig(configPath);
   const lanMode = () => cfg().server.mode === 'lan';
   const secure = () => !!(cfg().server.tls && cfg().server.tls.cert);
-  const uiTemplate = fs.readFileSync(path.join(__dirname, 'ui.html'), 'utf8');
-  const loginPage = fs.readFileSync(path.join(__dirname, 'login.html'), 'utf8');
+  // 製品名・問い合わせ先は brand.js から差し込む
+  const brandHtml = (s) => s.replace(/__PRODUCT__/g, escHtml(BRAND.name)).replace(/__SUPPORT__/g, escHtml(BRAND.support ? `お問い合わせ:${BRAND.vendor ? BRAND.vendor + ' ' : ''}${BRAND.support}` : ''));
+  const uiTemplate = brandHtml(fs.readFileSync(path.join(__dirname, 'ui.html'), 'utf8'));
+  const loginPage = brandHtml(fs.readFileSync(path.join(__dirname, 'login.html'), 'utf8'));
 
   // ---------- ログインと通行証 ----------
   const loginCodes = new Map();  // 1回だけ使えるログイン用のコード → 有効期限(このパソコンで起動したブラウザ用)
@@ -474,7 +477,7 @@ if (require.main === module) {
       console.log(`\nこのパソコンで画面を開くアドレス(5分間・1回だけ有効):\n${url}`);
       if (!args.includes('--no-open')) openBrowser(url);
     };
-    console.log('PDF仕分けアシスタントを起動しました。');
+    console.log(`${BRAND.name}を起動しました。`);
     if (lan) {
       const addrs = lanAddresses();
       console.log('事務所内LANで使う設定です。職員のパソコンからは、次のアドレスを開いてログインしてください:');

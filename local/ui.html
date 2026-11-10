@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PDF仕分けアシスタント(ローカル版)</title>
+<title>__PRODUCT__</title>
 <!-- 字体はこのパソコンの中から読み込む(インターネットに接続しない) -->
 <link rel="stylesheet" href="/fonts/line-seed-jp/400.css">
 <link rel="stylesheet" href="/fonts/line-seed-jp/700.css">
@@ -79,6 +79,7 @@ td.nowrap { white-space: nowrap; }
 .preview-name { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
+.support:not(:empty) { display: block; margin-bottom: 6px; color: var(--ink); }
 .office { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .userbar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: -6px; }
 .userbar button { font-size: 12.5px; padding: 4px 10px; }
@@ -115,7 +116,7 @@ table.edit input, table.edit select { width: 100%; }
 <body>
 <div class="wrap">
   <header>
-    <div><h1>PDF仕分けアシスタント</h1><div class="office" id="office-name"></div></div>
+    <div><h1>__PRODUCT__</h1><div class="office" id="office-name"></div></div>
     <div class="tabs" role="tablist">
       <button type="button" class="tab" role="tab" id="tab-main" aria-selected="true">仕分け</button>
       <button type="button" class="tab" role="tab" id="tab-settings" aria-selected="false" hidden>設定</button>
@@ -226,6 +227,7 @@ table.edit input, table.edit select { width: 100%; }
   </div>
 
   <footer id="footer">
+    <span id="support" class="support">__SUPPORT__</span>
     ・PDFの読み取り、AIでの補完、ファイルの移動は、すべて事務所のパソコン(この仕組みを入れたパソコン)の中で行います。外部への送信はしません。<br>
     ・AIの答えは、根拠の文章がPDFに書かれているかを確かめてから使います。確かめられないものは「要確認」になります。<br>
     <span id="foot-close">・この画面は、黒い画面(起動したウィンドウ)を閉じると終了します。</span>

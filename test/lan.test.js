@@ -157,3 +157,17 @@ test('このパソコンだけで使う設定では、ID とパスワードの�
     assert.strictEqual((await req(port, 'POST', '/api/login', { host: '127.0.0.1', body: { id: 'x', password: 'y' } })).status, 403);
   } finally { server.close(); }
 });
+
+test('製品名・問い合わせ先は brand.js の1か所で変えられる', async () => {
+  const BRAND = require('../local/brand.js');
+  const saved = Object.assign({}, BRAND);
+  Object.assign(BRAND, { name: 'テスト製品<名>', vendor: 'テスト社', support: '03-0000-0000' });
+  const dir = setup();
+  const server = createServer(path.join(dir, 'config.json'));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const page = (await req(server.address().port, 'GET', '/login')).text;
+    assert.match(page, /<title>ログイン|テスト製品&lt;名&gt;<\/title>/);
+    assert.ok(!page.includes('PDF仕分けアシスタント'));
+  } finally { server.close(); Object.assign(BRAND, saved); }
+});
