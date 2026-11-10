@@ -122,6 +122,17 @@ function appendLog(archive, rows) {
   fs.appendFileSync(logFile, (isNew ? '\uFEFF' + toCsvLine(HEADERS) + '\n' : '') + rows.map(toCsvLine).join('\n') + '\n');
 }
 
+// 操作の記録(誰が・いつ・何をしたか)。保存先フォルダの「操作履歴.csv」に追記する
+const AUDIT_NAME = '操作履歴.csv';
+function appendAudit(archive, user, action, target, detail) {
+  fs.mkdirSync(archive, { recursive: true });
+  const file = path.join(archive, AUDIT_NAME);
+  const isNew = !fs.existsSync(file);
+  const who = user ? `${user.name}(${user.id})` : '自動実行';
+  fs.appendFileSync(file, (isNew ? '\uFEFF' + toCsvLine(['日時', '操作した人', '操作', '対象', '内容']) + '\n' : '') +
+    toCsvLine([nowText(), who, action, target || '', detail || '']) + '\n');
+}
+
 function nowText() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -140,6 +151,8 @@ function loadConfig(configPath) {
     ai: Object.assign({ mode: 'fallback', url: 'http://127.0.0.1:11434', model: 'qwen3:8b' }, cfg.ai || {}),
     ocr: Object.assign({ enabled: false, model: 'qwen2.5vl:7b', maxPages: 2, timeoutSec: 300 }, cfg.ocr || {}),
     office: Object.assign({ name: '' }, cfg.office || {}),
+    // 画面の使い方:local=このパソコンだけ / lan=事務所内LANの職員も使う(ログインが必要)
+    server: Object.assign({ mode: 'local', port: 8730, hostnames: [], tls: null }, cfg.server || {}),
     // 事務所ごとの書類種別・名前の付け方(画面の「設定」や、確定時の学習で増える)
     rules: { docTypes: cfg.docTypes || [], naming: Object.assign({}, X.DEFAULT_NAMING, cfg.naming || {}) },
     autoRunMinutes: cfg.autoRunMinutes || 0
@@ -275,7 +288,7 @@ async function run(opts) {
   return { rows, headers: HEADERS };
 }
 
-module.exports = { run, analyze, loadPdfjs, parseCsv, toCsvLine, loadClients, loadConfig, loadKnownKeys, appendLog, moveFile, uniquePath, nowText, HEADERS, LOG_NAME, REVIEW };
+module.exports = { appendAudit, AUDIT_NAME, run, analyze, loadPdfjs, parseCsv, toCsvLine, loadClients, loadConfig, loadKnownKeys, appendLog, moveFile, uniquePath, nowText, HEADERS, LOG_NAME, REVIEW };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

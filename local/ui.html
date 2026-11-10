@@ -80,6 +80,9 @@ td.nowrap { white-space: nowrap; }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 footer { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
 .office { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.userbar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: -6px; }
+.userbar button { font-size: 12.5px; padding: 4px 10px; }
+.role { font-size: 11.5px; border: 1px solid var(--rule-strong); border-radius: 3px; padding: 0 6px; margin-left: 4px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .tab { font-weight: 700; }
 .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -112,13 +115,23 @@ table.edit input, table.edit select { width: 100%; }
 <body>
 <div class="wrap">
   <header>
-    <div><h1>PDF仕分けアシスタント(ローカル版)</h1><div class="office" id="office-name"></div></div>
+    <div><h1>PDF仕分けアシスタント</h1><div class="office" id="office-name"></div></div>
     <div class="tabs" role="tablist">
       <button type="button" class="tab" role="tab" id="tab-main" aria-selected="true">仕分け</button>
-      <button type="button" class="tab" role="tab" id="tab-settings" aria-selected="false">設定</button>
-      <span class="local-badge">このパソコンの中だけで動作しています</span>
+      <button type="button" class="tab" role="tab" id="tab-settings" aria-selected="false" hidden>設定</button>
+      <span class="local-badge" id="mode-badge">このパソコンの中だけで動作しています</span>
     </div>
   </header>
+  <div class="userbar"><span id="me"></span>
+    <button type="button" id="btn-pw" hidden>パスワード変更</button>
+    <button type="button" id="btn-logout">ログアウト</button></div>
+  <section class="panel" id="pw-panel" hidden aria-labelledby="pw-title">
+    <div class="panel-head"><h2 id="pw-title">パスワード変更</h2></div>
+    <div class="set-body"><div class="set-grid">
+      <label for="pw-cur">今のパスワード<input id="pw-cur" type="password" autocomplete="current-password"></label>
+      <label for="pw-new">新しいパスワード(10文字以上)<input id="pw-new" type="password" autocomplete="new-password"></label>
+    </div><div class="btns"><button type="button" class="primary" id="btn-pw-save">変更する</button><button type="button" id="btn-pw-cancel">やめる</button><span class="hint" id="pw-msg"></span></div></div>
+  </section>
   <p class="banner" id="first-run" hidden>はじめに「設定」で、事務所名・フォルダ・顧問先マスタを登録してください。登録したら「設定を保存」を押します。</p>
 
   <div id="view-main">
@@ -140,7 +153,7 @@ table.edit input, table.edit select { width: 100%; }
       <span class="confirm-run" id="confirm-run" hidden>受付フォルダのPDFを移動します。よろしいですか?
         <button id="btn-apply-yes" type="button" class="primary">実行する</button>
         <button id="btn-apply-no" type="button">やめる</button></span>
-      <label for="auto" class="hint">自動実行(この画面を開いている間)
+      <label for="auto" class="hint" id="auto-wrap">自動実行(この画面を開いている間)
         <select id="auto"><option value="0">しない</option><option value="15">15分ごと</option><option value="30">30分ごと</option><option value="60">60分ごと</option></select></label>
       <span class="hint" id="auto-note"></span>
     </div>
@@ -199,13 +212,23 @@ table.edit input, table.edit select { width: 100%; }
       </div></div>
     </section>
 
+    <section class="panel" id="users-panel"><div class="panel-head"><h2>利用者(職員)</h2><span class="hint" id="users-hint">事務所内LANで使うときに、職員ごとの ID とパスワードを登録します</span></div>
+      <div class="scroll"><table class="edit"><thead><tr><th>ID</th><th>名前</th><th>権限</th><th>使える</th><th>パスワードの再設定</th></tr></thead><tbody id="u-list"></tbody></table></div>
+      <div class="set-body"><div class="set-grid">
+        <label for="u-id">ID(半角英数字)<input id="u-id" type="text" autocomplete="off"></label>
+        <label for="u-name">名前<input id="u-name" type="text" autocomplete="off"></label>
+        <label for="u-role">権限<select id="u-role"><option value="staff">職員(仕分け・確定)</option><option value="admin">管理者(設定・利用者の管理も)</option></select></label>
+        <label for="u-pw">はじめのパスワード(10文字以上)<input id="u-pw" type="password" autocomplete="new-password"></label>
+      </div><div class="btns"><button type="button" id="btn-u-add">利用者を追加</button><span class="hint" id="u-msg"></span></div></div>
+    </section>
+
     <div class="save-bar"><button type="button" class="primary" id="btn-save">設定を保存</button><span class="hint" id="save-msg"></span></div>
   </div>
 
-  <footer>
-    ・PDFの読み取り、AIでの補完、ファイルの移動は、すべてこのパソコンの中で行います。外部への送信はしません。<br>
+  <footer id="footer">
+    ・PDFの読み取り、AIでの補完、ファイルの移動は、すべて事務所のパソコン(この仕組みを入れたパソコン)の中で行います。外部への送信はしません。<br>
     ・AIの答えは、根拠の文章がPDFに書かれているかを確かめてから使います。確かめられないものは「要確認」になります。<br>
-    ・この画面は、黒い画面(起動したウィンドウ)を閉じると終了します。
+    <span id="foot-close">・この画面は、黒い画面(起動したウィンドウ)を閉じると終了します。</span>
   </footer>
 </div>
 
@@ -229,6 +252,8 @@ table.edit input, table.edit select { width: 100%; }
       body: body ? JSON.stringify(body) : undefined
     }).then(function (res) {
       return res.json().then(function (data) {
+        // ログインの期限が切れたときは、ログイン画面へ戻る
+        if (res.status === 403 && /ログインし直して/.test(data.error || '')) { location.href = '/'; }
         if (!res.ok) throw new Error(data.error || 'エラーが起きました');
         return data;
       });
@@ -257,9 +282,18 @@ table.edit input, table.edit select { width: 100%; }
   function loadStatus() {
     return api('GET', '/api/status').then(function (s) {
       info = s;
+      var lan = s.mode === 'lan';
+      $('mode-badge').textContent = lan ? '事務所内のネットワークだけで動作しています' : 'このパソコンの中だけで動作しています';
+      $('me').innerHTML = esc(s.user.name) + '<span class="role">' + esc(s.user.roleLabel) + '</span>';
+      $('btn-pw').hidden = s.user.local;
+      $('btn-logout').hidden = !lan && s.user.local;
+      $('tab-settings').hidden = s.user.role !== 'admin';
+      $('users-panel').hidden = !lan;
+      $('auto-wrap').hidden = s.user.role !== 'admin';      // 自動実行の変更は管理者だけ
+      $('foot-close').hidden = !s.user.local;               // 職員のパソコンでは関係ない案内
       $('office-name').textContent = s.office && s.office.name ? s.office.name : '';
       $('first-run').hidden = !s.firstRun;
-      if (s.firstRun && !shownFirst) { shownFirst = true; showTab('settings'); }
+      if ((s.firstRun || s.needsUsers) && s.user.role === 'admin' && !shownFirst) { shownFirst = true; showTab('settings'); }
       $('st-inbox').textContent = s.inboxCount == null ? 'フォルダが見つかりません' : 'PDF ' + s.inboxCount + ' 件';
       $('st-inbox').className = s.inboxCount == null ? 'ng-text' : '';
       $('st-inbox-path').textContent = s.inbox;
@@ -387,8 +421,48 @@ table.edit input, table.edit select { width: 100%; }
     $('tab-settings').setAttribute('aria-selected', String(!main));
     $('view-main').hidden = !main;
     $('view-settings').hidden = main;
-    if (!main) loadSettings();
+    if (!main) { loadSettings(); if (!$('users-panel').hidden) loadUsers(); }
   }
+
+  // ---------- ログアウト・パスワード変更 ----------
+  $('btn-logout').addEventListener('click', function () {
+    api('POST', '/api/logout', {}).then(function () { location.href = '/'; });
+  });
+  $('btn-pw').addEventListener('click', function () { $('pw-panel').hidden = false; $('pw-cur').focus(); });
+  $('btn-pw-cancel').addEventListener('click', function () { $('pw-panel').hidden = true; });
+  $('btn-pw-save').addEventListener('click', function () {
+    api('POST', '/api/password', { current: $('pw-cur').value, next: $('pw-new').value }).then(function (r) {
+      $('pw-msg').textContent = r.message; $('pw-cur').value = ''; $('pw-new').value = '';
+    }).catch(function (e) { $('pw-msg').textContent = e.message; });
+  });
+
+  // ---------- 利用者の管理(管理者だけ)----------
+  function loadUsers() {
+    api('GET', '/api/users').then(function (r) {
+      $('u-list').innerHTML = r.users.length ? r.users.map(function (u) {
+        return '<tr data-id="' + esc(u.id) + '"><td>' + esc(u.id) + '</td><td>' + esc(u.name) + '</td>' +
+          '<td><select class="u-role" aria-label="権限">' + Object.keys(r.roles).map(function (k) { return '<option value="' + k + '"' + (u.role === k ? ' selected' : '') + '>' + esc(r.roles[k]) + '</option>'; }).join('') + '</select></td>' +
+          '<td><input type="checkbox" class="u-on" aria-label="使える"' + (u.disabled ? '' : ' checked') + '></td>' +
+          '<td><div class="btns"><input type="password" class="u-newpw" aria-label="新しいパスワード" placeholder="新しいパスワード" autocomplete="new-password"><button type="button" class="u-setpw">再設定</button></div></td></tr>';
+      }).join('') : '<tr><td colspan="5" class="hint">まだ利用者がいません。下の欄から、まず管理者を1人追加してください。</td></tr>';
+      document.querySelectorAll('#u-list tr[data-id]').forEach(function (tr) {
+        var id = tr.getAttribute('data-id');
+        var update = function (changes) {
+          api('POST', '/api/users', { action: 'update', id: id, changes: changes })
+            .then(function (x) { $('u-msg').textContent = x.message; loadUsers(); })
+            .catch(function (e) { $('u-msg').textContent = e.message; loadUsers(); });
+        };
+        tr.querySelector('.u-role').addEventListener('change', function (e) { update({ role: e.target.value }); });
+        tr.querySelector('.u-on').addEventListener('change', function (e) { update({ disabled: !e.target.checked }); });
+        tr.querySelector('.u-setpw').addEventListener('click', function () { update({ password: tr.querySelector('.u-newpw').value }); });
+      });
+    }).catch(function (e) { $('u-msg').textContent = e.message; });
+  }
+  $('btn-u-add').addEventListener('click', function () {
+    api('POST', '/api/users', { action: 'add', user: { id: $('u-id').value, name: $('u-name').value, role: $('u-role').value, password: $('u-pw').value } })
+      .then(function (r) { $('u-msg').textContent = r.message; $('u-id').value = ''; $('u-name').value = ''; $('u-pw').value = ''; loadUsers(); })
+      .catch(function (e) { $('u-msg').textContent = e.message; });
+  });
   $('tab-main').addEventListener('click', function () { showTab('main'); });
   $('tab-settings').addEventListener('click', function () { showTab('settings'); });
 

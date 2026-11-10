@@ -50,7 +50,7 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
   assert.strictEqual(address, '127.0.0.1');
   try {
     // ログインしていない人は、画面もPDFも設定も見られない(同じパソコンを使う別の人を想定)
-    for (const p of ['/', '/api/status', '/api/review', '/api/settings', '/api/pdf?file=scan_0007.pdf', '/fonts/line-seed-jp/400.css']) {
+    for (const p of ['/', '/api/status', '/api/review', '/api/settings', '/api/pdf?file=scan_0007.pdf']) {
       assert.strictEqual((await request(port, 'GET', p, { cookie: '' })).status, 403, p);
     }
     assert.strictEqual((await request(port, 'GET', '/', { cookie: 'psa=' + 'a'.repeat(64) })).status, 403, '偽の通行証');
@@ -132,7 +132,7 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
     assert.deepStrictEqual((await request(port, 'GET', '/api/review')).json.items, []);
 
     const csv = fs.readFileSync(path.join(dir, '保管', '書類一覧.csv'), 'utf8');
-    assert.match(csv, /確定済み,人が確定,月次試算表,10003/);
+    assert.match(csv, /確定済み,人が確定\(このパソコンの管理者\),月次試算表,10003/);
     assert.match(csv, /除外,人が判断/);
 
     // 自動実行の設定

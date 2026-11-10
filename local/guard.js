@@ -89,4 +89,17 @@ function lockdownNetwork() {
   };
 }
 
-module.exports = { isLoopbackHost, assertLoopback, lockdownNetwork };
+// 事務所内のネットワーク(プライベートアドレス)かどうか。LANで使うときに、接続してよい相手を決める
+//  10.0.0.0/8・172.16.0.0/12・192.168.0.0/16・127.0.0.0/8、IPv6 の ::1・fc00::/7・fe80::/10
+function isPrivateAddress(addr) {
+  let a = String(addr || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/%.*$/, '');
+  if (a.startsWith('::ffff:') && net.isIPv4(a.slice(7))) a = a.slice(7); // IPv4 を IPv6 の形で書いたもの
+  if (net.isIPv4(a)) {
+    const [x, y] = a.split('.').map(Number);
+    return x === 10 || x === 127 || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168);
+  }
+  if (net.isIPv6(a)) return a === '::1' || /^f[cd]/.test(a) || /^fe[89ab]/.test(a);
+  return false;
+}
+
+module.exports = { isLoopbackHost, assertLoopback, lockdownNetwork, isPrivateAddress };
