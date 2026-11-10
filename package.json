@@ -9,7 +9,8 @@
     "test": "node scripts/build.js && node --test test/*.test.js",
     "local": "node local/sorter.js",
     "local:app": "node local/server.js --config local/config.json",
-    "evaluate": "node local/evaluate.js"
+    "evaluate": "node local/evaluate.js",
+    "doctor": "node local/doctor.js"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
