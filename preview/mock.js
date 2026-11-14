@@ -31,6 +31,7 @@
     inbox: [],                    // { name, bytes, text }
     review: [],                   // { file, bytes, text }
     log: [],                      // 書類一覧.csv の行
+    archive: [],                  // 保存先にあるファイル
     audit: [],
     last: null,
     autoRunMinutes: 0,
@@ -60,9 +61,10 @@
   function knownKeys() {
     var keys = {};
     state.log.forEach(function (r, i) {
-      if (r[1] !== 'OK' && r[1] !== '確定済み') return;
+      if (r[1] !== 'OK' && r[1] !== '確定済み' && r[1] !== '取り消し') return;
       var k = X.docKey({ clientCode: r[4], clientName: r[5], docType: r[3], periodStart: r[6], periodEnd: r[7] });
-      if (k) keys[k] = '書類一覧.csv の' + (i + 2) + '行目';
+      if (!k) return;
+      if (r[1] === '取り消し') delete keys[k]; else keys[k] = '書類一覧.csv の' + (i + 2) + '行目';
     });
     return keys;
   }
@@ -89,7 +91,7 @@
   // ---------- 仕分け ----------
   function runSort(apply) {
     var known = knownKeys(), rows = [];
-    var archiveNames = state.log.map(function (r) { return r[12] + '/' + r[11]; });
+    var archiveNames = state.archive.slice(); // 保存先にあるファイル(フォルダ/ファイル名)
     var reviewNames = state.review.map(function (x) { return x.file; });
     var keep = [];
     state.inbox.forEach(function (doc) {
@@ -112,6 +114,7 @@
       rows.push(row);
       if (apply) {
         state.log.push(row);
+        if (r.status === 'OK') state.archive.push(folder + '/' + file);
         if (r.status !== 'OK') state.review.push({ file: file, bytes: doc.bytes, text: doc.text });
       } else keep.push(doc);
     });
@@ -160,19 +163,33 @@
     }
     var n = X.suggestNames(fields, client, rules());
     var folder = n.folder.join('/');
-    var file = uniqueName(n.fileName, state.log.filter(function (r) { return r[12] === folder; }).map(function (r) { return r[11]; }));
+    var file = uniqueName(n.fileName, state.archive.filter(function (x) { return x.indexOf(folder + '/') === 0; }).map(function (x) { return x.slice(folder.length + 1); }));
+    state.archive.push(folder + '/' + file);
+    state.undo = { kind: '確定', doc: state.review[idx], fields: fields, dest: folder + '/' + file };
     state.review.splice(idx, 1);
     state.log.push([now(), '確定済み', '人が確定(' + USER.name + ')', fields.docType, fields.clientCode, fields.clientName, fields.periodStart, fields.periodEnd, '', '', '', file, folder, body.file, '', '']);
     audit('確定', body.file, fields.clientCode + ' ' + fields.docType);
-    return json({ ok: true, message: '「' + file + '」として仕分けました' + (learned.length ? '。' + learned.join('。') : '') });
+    return json({ ok: true, message: '「' + file + '」として仕分けました' + (learned.length ? '。' + learned.join('。') : ''), canUndo: true });
+  }
+
+  function undo() {
+    var a = state.undo;
+    if (!a) return fail('取り消せる操作がありません');
+    var f = a.fields || {};
+    state.review.push(a.doc);
+    if (a.dest) state.archive = state.archive.filter(function (x) { return x !== a.dest; });
+    state.log.push([now(), '取り消し', '取り消し(' + USER.name + ')', f.docType || '', f.clientCode || '', f.clientName || '', f.periodStart || '', f.periodEnd || '', '', '', '', a.doc.file, REVIEW, a.doc.file, '', a.kind + 'を取り消しました。内容を確認して、もう一度確定してください']);
+    state.undo = null;
+    return json({ ok: true, message: a.kind + 'を取り消し、「要確認」に戻しました', file: a.doc.file });
   }
 
   function exclude(body) {
     var idx = state.review.map(function (x) { return x.file; }).indexOf(body.file);
     if (idx < 0) return fail('対象のPDFが見つかりません');
+    state.undo = { kind: '除外', doc: state.review[idx], fields: null };
     state.review.splice(idx, 1);
     state.log.push([now(), '除外', '人が判断(' + USER.name + ')', '', '', '', '', '', '', '', '', body.file, DUP, body.file, '', '重複などのため除外']);
-    return json({ ok: true, message: '「' + DUP + '」フォルダへ移しました(削除はしていません)' });
+    return json({ ok: true, message: '「' + DUP + '」フォルダへ移しました(削除はしていません)', canUndo: true });
   }
 
   function records(q) {
@@ -269,6 +286,7 @@
     if (method === 'POST' && route === '/api/run') return json(runSort(!!body.apply));
     if (method === 'POST' && route === '/api/confirm') return confirm(body);
     if (method === 'POST' && route === '/api/exclude') return exclude(body);
+    if (method === 'POST' && route === '/api/undo') return undo();
     if (method === 'POST' && route === '/api/settings') return saveSettings(body);
     if (method === 'POST' && route === '/api/auto') { state.autoRunMinutes = +body.minutes || 0; return json({ ok: true, autoRunMinutes: state.autoRunMinutes }); }
     if (method === 'POST' && route === '/api/logout') return json({ ok: true });

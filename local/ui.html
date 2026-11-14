@@ -163,6 +163,7 @@ table.edit input, table.edit select { width: 100%; padding: 5px 8px; font-size: 
 /* ---------- 通知・パスワード ---------- */
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(640px, calc(100vw - 32px)); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; font-size: 13.5px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .toast.err { background: var(--err); color: #fff; }
+.toast-btn { margin-left: 12px; padding: 3px 12px; font-size: 13px; font-weight: 700; background: transparent; color: inherit; border: 1px solid currentColor; }
 .pw { padding: 14px 16px; display: grid; gap: 10px; }
 footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var(--muted); font-size: 12px; line-height: 1.9; }
 .support:not(:empty) { display: block; color: var(--ink); }
@@ -345,11 +346,27 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
     });
   }
   var toastTimer;
-  function toast(text, isErr) {
+  // action を渡すと、お知らせの中にボタン(例:「元に戻す」)を出す
+  function toast(text, isErr, action) {
     var t = $('toast');
     t.textContent = text; t.className = 'toast' + (isErr ? ' err' : ''); t.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, isErr ? 7000 : 4000);
+    if (action) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-btn'; b.id = 'toast-action'; b.textContent = action.label;
+      b.addEventListener('click', function () { t.hidden = true; action.fn(); });
+      t.appendChild(b);
+    }
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, action ? 12000 : isErr ? 7000 : 4000);
   }
+  // 直前の確定・除外を取り消して、書類を「要確認」に戻す
+  function undoLast() {
+    api('POST', '/api/undo', {}).then(function (r) {
+      current = r.file;
+      toast(r.message);
+      return Promise.all([loadReview(), loadStatus()]);
+    }).catch(function (e) { toast(e.message, true); });
+  }
+  var UNDO = { label: '元に戻す', fn: undoLast };
   function pill(s) {
     var cls = s === 'OK' || s === '確定済み' ? 'ok' : s === 'エラー' ? 'err' : s === '除外' ? 'mute' : 'warn';
     return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
@@ -484,9 +501,13 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
       $('count-review').className = 'count' + (reviewItems.length ? ' hot' : '');
       if (!reviewItems.length) {
         current = null;
+        // 受付フォルダにPDFが待っているときは、次にすること(仕分け)を案内する
+        var waiting = info.inboxCount || 0;
         $('review').innerHTML = '<div class="card empty-state"><span class="check"></span><span class="big">要確認の書類はありません</span>' +
-          '<span class="hint">新しいPDFは「仕分け」から読み取れます。自動実行を設定していれば、そのまま仕分けられます。</span>' +
-          '<button type="button" id="go-sort">仕分けの画面へ</button></div>';
+          (waiting
+            ? '<span>受付フォルダに <b>' + waiting + '件</b> のPDFが待っています。</span><button type="button" class="primary" id="go-sort">仕分けの画面へ進む</button>'
+            : '<span class="hint">新しいPDFが受付フォルダに入ると、「仕分け」から読み取れます。自動実行を設定していれば、そのまま仕分けられます。</span><button type="button" id="go-sort">仕分けの画面へ</button>') +
+          '</div>';
         $('go-sort').addEventListener('click', function () { showView('sort'); });
         return;
       }
@@ -604,7 +625,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
       api('POST', '/api/confirm', body).then(function (r) {
         if (r.needsForce) { forceFile = it.file; toast(r.message, true); $('btn-confirm').disabled = false; $('btn-confirm').textContent = '別の書類として確定'; return; }
         forceFile = null;
-        toast(r.message);
+        toast(r.message, false, r.canUndo ? UNDO : null);
         current = reviewItems[pos + 1] ? reviewItems[pos + 1].file : null; // 次の書類へ
         return Promise.all([loadReview(), loadStatus()]);
       }).catch(function (e) { toast(e.message, true); $('btn-confirm').disabled = false; });
@@ -620,7 +641,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
     $('btn-exclude-no').addEventListener('click', function () { $('exclude-confirm').hidden = true; });
     $('btn-exclude-yes').addEventListener('click', function () {
       api('POST', '/api/exclude', { file: it.file }).then(function (r) {
-        toast(r.message);
+        toast(r.message, false, r.canUndo ? UNDO : null);
         current = reviewItems[pos + 1] ? reviewItems[pos + 1].file : null;
         return Promise.all([loadReview(), loadStatus()]);
       }).catch(function (e) { toast(e.message, true); });

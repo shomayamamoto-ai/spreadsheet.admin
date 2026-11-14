@@ -147,6 +147,26 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
     // 状態に今月の件数が入る
     assert.strictEqual((await request(port, 'GET', '/api/status')).json.thisMonth.auto, 7);
 
+    // 直前の除外を取り消すと「要確認」に戻り、もう一度取り消すことはできない
+    const un = await request(port, 'POST', '/api/undo', { token, body: {} });
+    assert.strictEqual(un.status, 200, un.text);
+    assert.ok(fs.existsSync(path.join(dir, '保管', '_要確認', 'scan_0009.pdf')));
+    assert.ok(!fs.existsSync(path.join(dir, '保管', '_重複(削除候補)', 'scan_0009.pdf')));
+    assert.strictEqual((await request(port, 'POST', '/api/undo', { token, body: {} })).status, 400);
+    // 確定 → 取り消し → 同じ内容でもう一度確定できる(重複あつかいにならない)
+    const cf = { file: 'scan_0009.pdf', docType: '決算書', clientCode: '10004', periodStart: '2024-10-01', periodEnd: '2025-09-30' };
+    const c1 = (await request(port, 'POST', '/api/confirm', { token, body: cf })).json;
+    assert.ok(c1.ok && c1.canUndo, JSON.stringify(c1));
+    assert.ok((await request(port, 'POST', '/api/undo', { token, body: {} })).json.ok);
+    const back = (await request(port, 'GET', '/api/review')).json.items[0];
+    assert.strictEqual(back.status, '取り消し');
+    assert.strictEqual(back.docType, '決算書'); // 入力した内容は残る
+    const c2 = (await request(port, 'POST', '/api/confirm', { token, body: cf })).json;
+    assert.ok(c2.ok, JSON.stringify(c2));
+    // もう一度除外して、この後の確認に進む
+    assert.ok((await request(port, 'POST', '/api/undo', { token, body: {} })).json.ok);
+    assert.ok((await request(port, 'POST', '/api/exclude', { token, body: { file: 'scan_0009.pdf' } })).json.ok);
+
     const csv = fs.readFileSync(path.join(dir, '保管', '書類一覧.csv'), 'utf8');
     assert.match(csv, /確定済み,人が確定\(このパソコンの管理者\),月次試算表,10003/);
     assert.match(csv, /除外,人が判断/);

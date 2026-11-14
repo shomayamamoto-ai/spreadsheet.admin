@@ -181,10 +181,30 @@ function createServer(configPath) {
     const destDir = path.join(c.archive, ...names.folder);
     const dest = S.uniquePath(destDir, names.fileName);
     S.moveFile(src, dest);
+    lastActions.set(user.id, { kind: '確定', dest, original: body.file, fields, at: Date.now() });
     S.appendLog(c.archive, [[S.nowText(), '確定済み', `人が確定(${user.name})`, fields.docType, fields.clientCode, fields.clientName,
       fields.periodStart, fields.periodEnd, '', '', '', path.basename(dest), path.relative(c.archive, destDir), body.file, '', '']]);
     audit(user, '確定', body.file, `${fields.clientCode} ${fields.docType} ${fields.periodEnd} → ${path.relative(c.archive, dest)}` + (learned.length ? '(学習あり)' : ''));
-    return { ok: true, message: `「${path.basename(dest)}」として仕分けました` + (learned.length ? '。' + learned.join('。') : ''), dest: path.relative(c.archive, dest), learned };
+    return { ok: true, message: `「${path.basename(dest)}」として仕分けました` + (learned.length ? '。' + learned.join('。') : ''), dest: path.relative(c.archive, dest), learned, canUndo: true };
+  }
+
+  // ---------- 直前の確定・除外を取り消す(書類を「_要確認」に戻す) ----------
+  const lastActions = new Map(); // 利用者 → 直前の操作
+  function undo(user) {
+    const c = cfg();
+    const a = lastActions.get(user.id);
+    if (!a || Date.now() - a.at > 10 * 60 * 1000) throw new UserError('取り消せる操作がありません(取り消せるのは、直前の確定・除外から10分以内です)');
+    if (state.running) throw new UserError('ただいま仕分けを実行中です。終わってから操作してください');
+    if (!fs.existsSync(a.dest)) throw new UserError('書類が見つからないため、取り消せません(すでに移動または名前の変更がされています)');
+    const reviewDir = path.join(c.archive, S.REVIEW);
+    const back = S.uniquePath(reviewDir, a.original);
+    S.moveFile(a.dest, back);
+    const f = a.fields || {};
+    S.appendLog(c.archive, [[S.nowText(), '取り消し', `取り消し(${user.name})`, f.docType || '', f.clientCode || '', f.clientName || '',
+      f.periodStart || '', f.periodEnd || '', '', '', '', path.basename(back), S.REVIEW, a.original, '', `${a.kind}を取り消しました。内容を確認して、もう一度確定してください`]]);
+    audit(user, a.kind + 'の取り消し', a.original, '');
+    lastActions.delete(user.id);
+    return { ok: true, message: `${a.kind}を取り消し、「要確認」に戻しました`, file: path.basename(back) };
   }
 
   function exclude(body, user) {
@@ -195,9 +215,10 @@ function createServer(configPath) {
     const destDir = path.join(c.archive, DUP_FOLDER);
     const dest = S.uniquePath(destDir, path.basename(src));
     S.moveFile(src, dest);
+    lastActions.set(user.id, { kind: '除外', dest, original: body.file, fields: null, at: Date.now() });
     S.appendLog(c.archive, [[S.nowText(), '除外', `人が判断(${user.name})`, '', '', '', '', '', '', '', '', path.basename(dest), DUP_FOLDER, body.file, '', '重複などのため除外']]);
     audit(user, '除外', body.file, DUP_FOLDER + 'へ移動');
-    return { ok: true, message: `「${DUP_FOLDER}」フォルダへ移しました(削除はしていません)` };
+    return { ok: true, message: `「${DUP_FOLDER}」フォルダへ移しました(削除はしていません)`, canUndo: true };
   }
 
   // ---------- 仕分けの実行・自動実行 ----------
@@ -421,6 +442,7 @@ function createServer(configPath) {
         if (url.pathname === '/api/run') return send(200, await runSort(!!body.apply, user));
         if (url.pathname === '/api/confirm') return send(200, await confirm(body, user));
         if (url.pathname === '/api/exclude') return send(200, exclude(body, user));
+        if (url.pathname === '/api/undo') return send(200, undo(user));
         if (url.pathname === '/api/password') {
           if (user.id === LOCAL_OWNER.id) throw new UserError('このパソコンの管理者には、パスワードがありません');
           U.authenticate(configPath, user.id, body.current); // 今のパスワードの確認

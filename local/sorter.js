@@ -77,12 +77,16 @@ function loadKnownKeys(logFile) {
   const h = rows[0] || [];
   const col = (name) => h.indexOf(name);
   rows.slice(1).forEach((r, i) => {
-    if (r[col('ステータス')] !== 'OK' && r[col('ステータス')] !== '確定済み') return;
+    const st = r[col('ステータス')];
+    if (st !== 'OK' && st !== '確定済み' && st !== '取り消し') return;
     const key = X.docKey({
       clientCode: r[col('顧問先コード')], clientName: r[col('顧問先名')], docType: r[col('書類種別')],
       periodStart: r[col('対象期間(開始)')], periodEnd: r[col('対象期間(終了)')]
     });
-    if (key) keys[key] = `${LOG_NAME} の${i + 2}行目`;
+    if (!key) return;
+    // 確定を取り消した書類は「仕分け済み」から外す(もう一度確定できるように)
+    if (st === '取り消し') delete keys[key];
+    else keys[key] = `${LOG_NAME} の${i + 2}行目`;
   });
   return keys;
 }
