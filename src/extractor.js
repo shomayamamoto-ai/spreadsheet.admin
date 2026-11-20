@@ -25,7 +25,7 @@ var TaxDocExtractor = (function () {
     {
       id: 'monthly',
       name: '月次試算表',
-      titleWords: ['試算表', '月次'],
+      titleWords: ['試算表', '月次', '変動損益'],
       keywords: ['月次試算表', '合計残高試算表', '残高試算表', '変動損益計算書', '月次決算'],
       amountLabels: ['売上高', '純売上高'],
       periodKind: 'month'
@@ -41,8 +41,8 @@ var TaxDocExtractor = (function () {
     {
       id: 'corp_tax',
       name: '法人税申告書',
-      titleWords: ['法人税'],
-      keywords: ['法人税申告書', '法人税の確定申告書', '別表一', '所得金額又は欠損金額', '法人税額'],
+      titleWords: ['法人税', '別表'],
+      keywords: ['法人税申告書', '法人税の確定申告書', '別表一', '所得の金額の計算に関する明細書', '所得金額又は欠損金額', '法人税額'],
       amountLabels: ['差引確定法人税額', 'この申告により納付すべき法人税額', '納付すべき法人税額'],
       periodKind: 'fiscal'
     },
@@ -100,7 +100,8 @@ var TaxDocExtractor = (function () {
       titleWords: ['償却資産'],
       keywords: ['償却資産申告書', '種類別明細書', '賦課期日'],
       amountLabels: [],
-      periodKind: 'year'
+      periodKind: 'year',
+      nendoIsYear: true // 「令和7年度」= 令和7年1月1日現在の申告
     },
     {
       id: 'notification',
@@ -167,7 +168,7 @@ var TaxDocExtractor = (function () {
   var ERA = { '令和': 2018, 'R': 2018, '平成': 1988, 'H': 1988 };
   var DATE_RE_SRC =
     '(?:(令和|平成|R|H)(元|\\d{1,2})|(20\\d{2}|19\\d{2}))' +
-    '[年./-](\\d{1,2})(?:[月./-](?:(\\d{1,2})日?)?)?';
+    '[年./・-](\\d{1,2})(?:[月./・-](?:(\\d{1,2})日?)?)?';
 
   function toDate(m, offset) {
     // m: RegExp の結果、offset: グループ開始位置
@@ -212,7 +213,7 @@ var TaxDocExtractor = (function () {
   function typesFor(options) {
     var custom = (options && options.docTypes) || [];
     var list = DOC_TYPES.map(function (d) {
-      return { id: d.id, name: d.name, titleWords: (d.titleWords || []).slice(), keywords: d.keywords.slice(), amountLabels: d.amountLabels.slice(), periodKind: d.periodKind };
+      return { id: d.id, name: d.name, titleWords: (d.titleWords || []).slice(), keywords: d.keywords.slice(), amountLabels: d.amountLabels.slice(), periodKind: d.periodKind, nendoIsYear: !!d.nendoIsYear };
     });
     custom.forEach(function (c) {
       if (!c || !c.name) return;
@@ -255,7 +256,7 @@ var TaxDocExtractor = (function () {
           hits.push(kw);
         }
       });
-      return { type: dt, score: score, hits: hits };
+      return { type: dt, score: score, hits: hits, titled: hits.length > 0 && hits[0].indexOf('表題:') === 0 };
     });
     scores.sort(function (a, b) { return b.score - a.score; });
     return scores;
@@ -357,68 +358,120 @@ var TaxDocExtractor = (function () {
   // ------------------------------------------------------------
   // 対象期間の読み取り
   // ------------------------------------------------------------
-  function findPeriod(flat) {
+  // 書類種別の「期間の種類」(kind)に合わせて、いちばんふさわしい期間を選ぶ
+  //  month … 「〇年〇月分」を最優先(会計期間の1年分が併記されていても、対象の月を読む)
+  //  fiscal … 「自…至…」「〇年〇月期」。前期と当期が並ぶときは当期(新しいほう)
+  //  year  … 「〇年分」
+  //  date  … 日付が1つだけ書かれているとき、その日
+  function findPeriod(flat, kind, type) {
     var d = DATE_RE_SRC;
-    var m;
-    // 「自 令和6年4月1日 至 令和7年3月31日」/「〜」「から…まで」
-    var rangeRe = new RegExp('(?:自)?' + d + '(?:至|~|〜|～|から|-)' + d);
-    m = flat.match(new RegExp('自' + d + '至' + d)) || flat.match(rangeRe);
-    if (m) {
-      var s = toDate(m, 1), e = toDate(m, 6);
-      if (s && e) {
-        if (!e.d) e.d = lastDayOfMonth(e.y, e.m);
-        if (!s.d) s.d = 1;
-        return { start: s, end: e, kind: 'range' };
-      }
-    }
-    // 「令和7年3月期」(3月で終わる事業年度)
     var YM = '(?:(令和|平成|R|H)(元|\\d{1,2})|(20\\d{2}))年(\\d{1,2})月';
-    m = flat.match(new RegExp(YM + '期'));
-    if (m) {
-      var fe = toDate([null, m[1], m[2], m[3], m[4], null], 1);
-      if (fe) {
-        var sm = fe.m === 12 ? 1 : fe.m + 1;
-        return {
-          start: { y: fe.m === 12 ? fe.y : fe.y - 1, m: sm, d: 1 },
-          end: { y: fe.y, m: fe.m, d: lastDayOfMonth(fe.y, fe.m) },
-          kind: 'range'
-        };
-      }
-    }
-    // 「令和7年1月から6月分」「2025年7月~12月分」(源泉所得税の納期の特例など)
-    m = flat.match(new RegExp(YM + '(?:分)?(?:から|~|〜|～|-)(\\d{1,2})月分'));
-    if (m) {
-      var ms = toDate([null, m[1], m[2], m[3], m[4], null], 1);
-      var me = parseInt(m[5], 10);
-      if (ms && me >= ms.m && me <= 12) {
-        return { start: { y: ms.y, m: ms.m, d: 1 }, end: { y: ms.y, m: me, d: lastDayOfMonth(ms.y, me) }, kind: 'range' };
-      }
-    }
-    // 「令和7年3月分」「2025年3月度」
-    m = flat.match(new RegExp(YM + '(?:分|度)'));
-    if (m) {
-      var md = toDate([null, m[1], m[2], m[3], m[4], null], 1);
-      if (md) {
-        return {
-          start: { y: md.y, m: md.m, d: 1 },
-          end: { y: md.y, m: md.m, d: lastDayOfMonth(md.y, md.m) },
-          kind: 'month'
-        };
-      }
-    }
-    // 「令和6年分」(暦年)
-    m = flat.match(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年分/);
-    if (m) {
+    var all = function (re) { var out = [], m; while ((m = re.exec(flat)) !== null) out.push(m); return out; };
+    var ym = function (m, o) { return toDate([null, m[o], m[o + 1], m[o + 2], m[o + 3], null], 1); };
+    var monthOf = function (y, mo) { return { start: { y: y, m: mo, d: 1 }, end: { y: y, m: mo, d: lastDayOfMonth(y, mo) }, kind: 'month' }; };
+    var key = function (p) { return fmtDate(p.start) + '|' + fmtDate(p.end); };
+    var distinct = function (list) { var seen = {}; return list.filter(function (p) { var k = key(p); if (seen[k]) return false; seen[k] = 1; return true; }); };
+    var latest = function (list) { return list.slice().sort(function (x, y) { return fmtDate(y.end).localeCompare(fmtDate(x.end)); })[0]; };
+
+    // --- 候補を集める ---
+    var ranges = [];
+    all(new RegExp(d + '(?:まで)?(?:至|~|〜|～|から|-)' + d, 'g')).forEach(function (m) {
+      var s = toDate(m, 1), e = toDate(m, 6);
+      if (!s || !e) return;
+      var granular = !s.d && !e.d; // 「7月から12月分」のように、月単位で書かれた範囲
+      if (!e.d) e.d = lastDayOfMonth(e.y, e.m);
+      if (!s.d) s.d = 1;
+      if (fmtDate(s) > fmtDate(e)) return;
+      var before = flat.slice(Math.max(0, m.index - 10), m.index);
+      ranges.push({ start: s, end: e, kind: 'range', granular: granular,
+        prev: /前期|前年|前事業年度|中間申告対象期間$|中間申告対象期間自$/.test(before),
+        cur: /当期|課税期間|事業年度|会計期間/.test(before) });
+    });
+    var fiscalEnds = all(new RegExp(YM + '期', 'g')).map(function (m) {
+      var fe = ym(m, 1); if (!fe) return null;
+      var sm = fe.m === 12 ? 1 : fe.m + 1;
+      return { start: { y: fe.m === 12 ? fe.y : fe.y - 1, m: sm, d: 1 }, end: { y: fe.y, m: fe.m, d: lastDayOfMonth(fe.y, fe.m) }, kind: 'range' };
+    }).filter(Boolean);
+    var spans = all(new RegExp(YM + '(?:分)?(?:から|~|〜|～|-)(\\d{1,2})月分', 'g')).map(function (m) {
+      var ms = ym(m, 1), me = parseInt(m[5], 10);
+      if (!ms || !(me >= ms.m && me <= 12)) return null;
+      return { start: { y: ms.y, m: ms.m, d: 1 }, end: { y: ms.y, m: me, d: lastDayOfMonth(ms.y, me) }, kind: 'range' };
+    }).filter(Boolean);
+    var months = all(new RegExp(YM + '(?:分|度)', 'g')).map(function (m) { var x = ym(m, 1); return x && monthOf(x.y, x.m); })
+      .concat(all(/(R|H)(\d{1,2})\.(\d{1,2})月(?:分|度)/g).map(function (m) { var x = toDate([null, m[1], m[2], undefined, m[3], null], 1); return x && monthOf(x.y, x.m); }))
+      .filter(Boolean);
+    // 「令和7年7月」「2025/06」のように、年月だけが書かれているもの(日付や範囲の一部は除く)
+    var bare = all(new RegExp(YM + '(?![\\d日分度期]|から|~|〜|～|-)', 'g')).filter(function (m) {
+      return !/(至|~|〜|～|から|-)$/.test(flat.slice(Math.max(0, m.index - 2), m.index));
+    }).map(function (m) { var x = ym(m, 1); return x && monthOf(x.y, x.m); })
+      .concat(all(/(^|[^\d\/.\-])(20\d{2})[\/.](\d{1,2})(?![\d\/.\-日年])/g).map(function (m) {
+        var mo = parseInt(m[3], 10); return mo >= 1 && mo <= 12 ? monthOf(parseInt(m[2], 10), mo) : null; }))
+      .filter(Boolean);
+    var years = all(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年分/g).map(function (m) {
       var y = m[3] ? parseInt(m[3], 10) : ERA[m[1]] + (m[2] === '元' ? 1 : parseInt(m[2], 10));
       return { start: { y: y, m: 1, d: 1 }, end: { y: y, m: 12, d: 31 }, kind: 'year' };
+    });
+    var nendo = all(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年度/g).map(function (m) {
+      var y = m[3] ? parseInt(m[3], 10) : ERA[m[1]] + (m[2] === '元' ? 1 : parseInt(m[2], 10));
+      return { start: { y: y, m: 1, d: 1 }, end: { y: y, m: 12, d: 31 }, kind: 'year' };
+    });
+    var points = all(new RegExp(d + '(?:現在|時点)', 'g')).map(function (m) { var pt = toDate(m, 1); return pt && pt.d ? pt : null; }).filter(Boolean);
+    var point = points.length ? { start: { y: points[0].y, m: points[0].m, d: 1 }, end: points[0], kind: 'point' } : null;
+
+    var fiscalPick = function () {
+      var list = ranges.filter(function (r) { return !r.prev; });
+      var cur = list.filter(function (r) { return r.cur; });
+      if (cur.length) return latest(cur);
+      if (list.length) return latest(list);
+      if (fiscalEnds.length) return latest(fiscalEnds);
+      return null;
+    };
+    var isFullYear = function (r) {
+      var months12 = (r.end.y - r.start.y) * 12 + (r.end.m - r.start.m) + 1;
+      return months12 >= 12;
+    };
+
+    if (kind === 'month') {
+      if (spans.length) return spans[0];
+      if (months.length) return months[0];
+      var inMonth = ranges.filter(function (r) { return r.start.y === r.end.y && r.start.m === r.end.m; });
+      if (inMonth.length) return inMonth[0];
+      var gran = ranges.filter(function (r) { return r.granular && !isFullYear(r); });
+      if (gran.length) return gran[0];
+      // 「自 期首 至 当月末」(期首からの累計)は、終わりの月を対象の月とみなす。
+      // ちょうど1年分(会計期間そのもの)しか書かれていないときは、どの月か分からないので読まない
+      var partial = ranges.filter(function (r) { return !isFullYear(r) && !r.prev; });
+      if (partial.length) return monthOf(partial[0].end.y, partial[0].end.m);
+      var b = distinct(bare);
+      if (b.length === 1) return b[0];
+      if (point && !ranges.length) return point;
+      return null;
     }
-    // 「R7.3.31現在」「令和7年1月1日時点」(ある日の時点の書類)
-    m = flat.match(new RegExp(d + '(?:現在|時点)'));
-    if (m) {
-      var pt = toDate(m, 1);
-      if (pt && pt.d) return { start: { y: pt.y, m: pt.m, d: 1 }, end: pt, kind: 'point' };
+    if (kind === 'fiscal') {
+      var f = fiscalPick();
+      if (f) return f;
+      if (point) { // 貸借対照表の「〇年〇月〇日現在」= 期末
+        var e = point.end, sm2 = e.m === 12 ? 1 : e.m + 1;
+        return { start: { y: e.m === 12 ? e.y : e.y - 1, m: sm2, d: 1 }, end: e, kind: 'range' };
+      }
+      return null;
     }
-    return null;
+    if (kind === 'year') {
+      if (years.length) return years[0];
+      if (type && type.nendoIsYear && nendo.length) return nendo[0];
+      // 「自 1月1日 至 12月31日」と書かれた1年分
+      var cal = ranges.filter(function (r) { return r.start.y === r.end.y && r.start.m === 1 && r.end.m === 12; });
+      if (cal.length) return { start: cal[0].start, end: cal[0].end, kind: 'year' };
+      if (point) return point;
+      return null;
+    }
+    if (kind === 'date') {
+      var seen = {}, dates = [];
+      all(new RegExp(d, 'g')).forEach(function (m) { var x = toDate(m, 1); if (x && x.d && !seen[fmtDate(x)]) { seen[fmtDate(x)] = 1; dates.push(x); } });
+      return dates.length === 1 ? { start: dates[0], end: dates[0], kind: 'point' } : null;
+    }
+    // 書類種別が分からないとき
+    return fiscalPick() || spans[0] || months[0] || years[0] || point || null;
   }
 
   function findCreatedDate(flat) {
@@ -550,7 +603,8 @@ var TaxDocExtractor = (function () {
     var top = ranking[0], second = ranking[1];
     var docType = top && top.score > 0 ? top.type : null;
     if (!docType) addIssue('type_missing', '書類種別を判定できません');
-    else if (second && second.score > 0 && top.score - second.score < 4) {
+    else if (second && second.score > 0 && (top.score - second.score < 4 || !top.titled)) {
+      // 点数が近いとき、または、表題に書類名が無く本文に複数の書類名が出てくるとき(送付状など)
       addIssue('type_ambiguous', '書類種別が「' + top.type.name + '」か「' + second.type.name + '」か紛らわしい');
     }
 
@@ -565,6 +619,13 @@ var TaxDocExtractor = (function () {
     if (matched.ambiguous.length) {
       addIssue('client_ambiguous', '複数の顧問先の名前が書かれています(' + matched.ambiguous.join('、') + ')');
     }
+    // 顧問先コードと、見出しの顧問先名が、別々の顧問先を指しているときは自動で仕分けない
+    if (master && code && strongName && name) {
+      var byName = matchMaster(options.clients, '', name, '', true).client;
+      if (byName && String(byName.code) !== String(master.code)) {
+        addIssue('client_ambiguous', '顧問先コード(' + master.code + ' ' + master.name + ')と顧問先名(' + byName.name + ')が食い違っています');
+      }
+    }
     if (master) {
       if (!code) code = String(master.code);
       name = master.name;
@@ -575,7 +636,7 @@ var TaxDocExtractor = (function () {
     if (!name) addIssue('client_missing', '顧問先名が見つかりません');
 
     // 期間・日付
-    var period = findPeriod(flat);
+    var period = findPeriod(flat, docType ? docType.periodKind : '', docType);
     var created = findCreatedDate(flat);
     // 届出書・議事録など「日付の書類」は、提出日・開催日を期間として使う
     if (docType && docType.periodKind === 'date' && created && created.d) {
