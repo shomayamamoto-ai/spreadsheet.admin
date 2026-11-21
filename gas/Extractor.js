@@ -98,7 +98,7 @@ var TaxDocExtractor = (function () {
     {
       id: 'depreciable_assets',
       name: '償却資産申告書',
-      titleWords: ['償却資産'],
+      titleWords: ['償却資産申告書', '償却資産課税台帳'],
       keywords: ['償却資産申告書', '種類別明細書', '賦課期日'],
       amountLabels: [],
       periodKind: 'year',
@@ -108,7 +108,7 @@ var TaxDocExtractor = (function () {
       id: 'notification',
       name: '届出書・申請書',
       titleWords: ['届出書', '申請書', '異動届'],
-      keywords: ['届出書', '申請書', '青色申告', '異動届出', '承認申請'],
+      keywords: ['届出書', '申請書', '異動届出', '承認申請'],
       amountLabels: [],
       periodKind: 'date'
     },
@@ -234,7 +234,13 @@ var TaxDocExtractor = (function () {
   }
 
   function detectDocType(lines, flat, types) {
-    var title = compact(lines.slice(0, 2).join(''));
+    // 表題:様式番号(「第3-(1)号様式」)や日付だけの行は飛ばし、残りの最初の2行を表題とみなす
+    var titleLines = lines.filter(function (l) {
+      var c = compact(l);
+      return !/^第[\d\-()()]+号様式$/.test(c) && !/^様式第?[\d\-()()]+号?$/.test(c) &&
+        !new RegExp('^' + DATE_RE_SRC + '[^一-龥ぁ-んァ-ヶ]{0,3}(?:[^\\s]{0,12}(?:税務署長|知事|市長|区長)殿?)?$').test(c);
+    });
+    var title = compact(titleLines.slice(0, 2).join(''));
     var head = compact(lines.slice(0, 6).join(''));
     var scores = (types || DOC_TYPES).map(function (dt) {
       var score = 0, hits = [];
@@ -257,7 +263,9 @@ var TaxDocExtractor = (function () {
           hits.push(kw);
         }
       });
-      return { type: dt, score: score, hits: hits, titled: hits.length > 0 && hits[0].indexOf('表題:') === 0 };
+      var titled = hits.length > 0 && hits[0].indexOf('表題:') === 0;
+      if (!titled) titled = dt.keywords.some(function (kw) { var k = compact(normalize(kw)); return k.length >= 3 && title.indexOf(k) >= 0; });
+      return { type: dt, score: score, hits: hits, titled: titled };
     });
     scores.sort(function (a, b) { return b.score - a.score; });
     return scores;
@@ -326,7 +334,18 @@ var TaxDocExtractor = (function () {
   function keysOf(c) {
     return [c.name].concat(c.aliases || []).map(nameKey).filter(function (k) { return k.length >= 2; });
   }
-  function matchMaster(clients, code, name, flat, strongName) {
+  // 名前の候補:全体、空白で区切った各部分、となり合う2つをつなげたもの
+  // (「株式会社さくら建設 第18期」の後ろの言葉を外し、「株式会社 さくら建設」はつなげて比べるため)
+  function nameCandidates(name) {
+    var toks = normalize(name).split(/\s+/).filter(Boolean);
+    var out = [nameKey(name)];
+    toks.forEach(function (t, i) {
+      out.push(nameKey(t));
+      if (i + 1 < toks.length) out.push(nameKey(t + toks[i + 1]));
+    });
+    return out.filter(function (k) { return k.length >= 2; });
+  }
+  function matchMaster(clients, code, name, flat, strongName, corpKeys) {
     var none = { client: null, ambiguous: [] };
     if (!clients || !clients.length) return none;
     var i;
@@ -339,21 +358,41 @@ var TaxDocExtractor = (function () {
       if (list.length === 1) return { client: list[0], ambiguous: [] };
       return { client: null, ambiguous: list.map(function (c) { return c.name; }) };
     };
-    var key = name ? nameKey(name) : '';
-    if (key.length >= 2) {
-      var exact = clients.filter(function (c) { return keysOf(c).indexOf(key) >= 0; });
+    if (name) {
+      // 名前が完全に一致したときだけ、同じ顧問先とみなす(「さくら建設工業」は「さくら建設」ではない)
+      var cands = nameCandidates(name);
+      var exact = clients.filter(function (c) { return keysOf(c).some(function (k) { return cands.indexOf(k) >= 0; }); });
       if (exact.length) return pick(exact);
-      var partial = clients.filter(function (c) {
-        return keysOf(c).some(function (k) { return key.indexOf(k) >= 0 || k.indexOf(key) >= 0; });
-      });
-      if (partial.length) return pick(partial);
       if (strongName) return none;
     }
+    // 本文から探す。ただし、より長い別の会社名の一部として出てくるだけなら採用しない
     var flatKey = nameKey(flat);
+    corpKeys = corpKeys || [];
     var inText = clients.filter(function (c) {
-      return keysOf(c).some(function (k) { return flatKey.indexOf(k) >= 0; });
+      return keysOf(c).some(function (k) {
+        if (flatKey.indexOf(k) < 0) return false;
+        if (corpKeys.indexOf(k) >= 0) return true;
+        return !corpKeys.some(function (K) { return K !== k && K.indexOf(k) >= 0; });
+      });
     });
     return inText.length ? pick(inText) : none;
+  }
+
+  // 本文に出てくる会社名(法人格つき)をすべて集める
+  function corpNamesIn(lines) {
+    var forms = CORP_FORMS.join('|');
+    var re = new RegExp('(?:' + forms + ')\\s?[^\\s、。,()]{1,20}|[^\\s、。,()::]{1,20}?(?:' + forms + ')', 'g');
+    var out = [];
+    lines.forEach(function (l) {
+      (l.match(re) || []).forEach(function (n) {
+        // 「山田商事と佐藤工業の取引」のように続く文は、助詞(漢字・カタカナの直後の と・の など)で切る
+        n = n.replace(/([一-龥々ァ-ヶー])(?:と|の|を|に|が|は|へ|で|及び|並びに)[\s\S]*$/, '$1');
+        n.split(/(?=株式会社|有限会社|合同会社)/).forEach(function (part) {
+          var k = nameKey(part); if (k.length >= 2 && out.indexOf(k) < 0) out.push(k);
+        });
+      });
+    });
+    return out;
   }
 
   // ------------------------------------------------------------
@@ -433,9 +472,14 @@ var TaxDocExtractor = (function () {
     };
 
     if (kind === 'month') {
-      if (spans.length) return spans[0];
-      if (months.length) return months[0];
       var inMonth = ranges.filter(function (r) { return r.start.y === r.end.y && r.start.m === r.end.m; });
+      if (spans.length) return spans[0];
+      if (months.length) {
+        // 「8月分」と書かれているのに、集計期間が「9月1日〜9月30日」のように食い違うときは知らせる
+        var clash = inMonth.filter(function (r) { return r.end.y !== months[0].end.y || r.end.m !== months[0].end.m; });
+        if (clash.length) months[0].conflict = '「' + months[0].end.y + '年' + months[0].end.m + '月分」と「' + fmtDate(clash[0].start) + '〜' + fmtDate(clash[0].end) + '」';
+        return months[0];
+      }
       if (inMonth.length) return inMonth[0];
       var gran = ranges.filter(function (r) { return r.granular && !isFullYear(r); });
       if (gran.length) return gran[0];
@@ -467,6 +511,10 @@ var TaxDocExtractor = (function () {
       return null;
     }
     if (kind === 'date') {
+      var sub = new RegExp(d + '[^\\d]{0,14}(?:税務署長|税事務所長|市長|区長|町長|村長|知事)').exec(flat) ||
+        new RegExp('(?:税務署長|税事務所長|市長|区長|町長|村長|知事)(?:殿|様)?' + d).exec(flat);
+      var sd = sub ? toDate(sub, 1) : null;
+      if (sd && sd.d) return { start: sd, end: sd, kind: 'point' };
       var seen = {}, dates = [];
       all(new RegExp(d, 'g')).forEach(function (m) { var x = toDate(m, 1); if (x && x.d && !seen[fmtDate(x)]) { seen[fmtDate(x)] = 1; dates.push(x); } });
       return dates.length === 1 ? { start: dates[0], end: dates[0], kind: 'point' } : null;
@@ -604,9 +652,11 @@ var TaxDocExtractor = (function () {
     var top = ranking[0], second = ranking[1];
     var docType = top && top.score > 0 ? top.type : null;
     if (!docType) addIssue('type_missing', '書類種別を判定できません');
-    else if (second && second.score > 0 && (top.score - second.score < 4 || !top.titled)) {
-      // 点数が近いとき、または、表題に書類名が無く本文に複数の書類名が出てくるとき(送付状など)
+    else if (second && second.score > 0 && top.score - second.score < 4) {
       addIssue('type_ambiguous', '書類種別が「' + top.type.name + '」か「' + second.type.name + '」か紛らわしい');
+    } else if (!top.titled) {
+      // 表題(最初の2行)に書類名が無い。本文の言葉だけでは決めない(送付状や、対応していない書類の可能性)
+      addIssue('type_ambiguous', '表題から書類種別を確認できません(本文の言葉からは「' + top.type.name + '」の可能性)');
     }
 
     // 顧問先
@@ -615,17 +665,26 @@ var TaxDocExtractor = (function () {
     var name = nameHit ? nameHit.value : '';
     var nameHow = nameHit ? nameHit.how : '';
     var strongName = !!nameHit && /ラベル|御中/.test(nameHit.how);
-    var matched = matchMaster(options.clients, code, name, flat, strongName);
+    var matched = matchMaster(options.clients, code, name, flat, strongName, corpNamesIn(lines));
     var master = matched.client;
     if (matched.ambiguous.length) {
       addIssue('client_ambiguous', '複数の顧問先の名前が書かれています(' + matched.ambiguous.join('、') + ')');
     }
     // 顧問先コードと、見出しの顧問先名が、別々の顧問先を指しているときは自動で仕分けない
     if (master && code && strongName && name) {
-      var byName = matchMaster(options.clients, '', name, '', true).client;
+      var byName = matchMaster(options.clients, '', name, '', true, []).client;
       if (byName && String(byName.code) !== String(master.code)) {
         addIssue('client_ambiguous', '顧問先コード(' + master.code + ' ' + master.name + ')と顧問先名(' + byName.name + ')が食い違っています');
       }
+    }
+    // 別の顧問先の名前が、見出しのように1行で書かれている(複数の顧問先の書類が1つのPDFにまとまっている可能性)
+    if (master && options.clients) {
+      var others = options.clients.filter(function (c) {
+        if (String(c.code) === String(master.code)) return false;
+        var ks = keysOf(c);
+        return lines.some(function (l) { return ks.indexOf(nameKey(l.replace(/(御中|殿|様)\s*$/, ''))) >= 0; });
+      });
+      if (others.length) addIssue('client_ambiguous', '別の顧問先(' + others.map(function (c) { return c.name; }).join('、') + ')の名前も、見出しとして書かれています');
     }
     if (master) {
       if (!code) code = String(master.code);
@@ -644,6 +703,7 @@ var TaxDocExtractor = (function () {
       period = { start: created, end: created, kind: 'point' };
     }
     if (!period) addIssue('period_missing', '対象期間が見つかりません');
+    else if (period.conflict) addIssue('period_ambiguous', '対象期間の書き方が食い違っています(' + period.conflict + ')');
     var term = findTerm(flat);
 
     // 金額

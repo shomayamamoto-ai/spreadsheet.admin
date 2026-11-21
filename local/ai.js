@@ -176,7 +176,7 @@ function merge(rule, ai, text, clients, rules) {
   const v = ai ? verifyAI(ai, text, clients, rules) : { ok: {}, weak: {}, rejected: [] };
   const guessed = []; // 裏付けの弱いAIの推定で埋めた項目
   const issues = [], aiFilled = [];
-  const keep = { low_text: true, client_ambiguous: true };
+  const keep = { low_text: true, client_ambiguous: true, period_ambiguous: true };
   rule.issueCodes.forEach((code, i) => { if (keep[code]) issues.push(rule.issues[i]); });
 
   // 書類種別
