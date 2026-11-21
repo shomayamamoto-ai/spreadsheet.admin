@@ -215,4 +215,39 @@ function learnAlias(configPath, code, alias) {
   return true;
 }
 
-module.exports = { isSameOrInside, ensureConfig, getSettings, saveSettings, saveClients, titleOf, learnTitle, learnAlias, SettingsError, PERIOD_KINDS };
+// ---------- 学習の提案 ----------
+// 人が確定するたびに「この表題 → この書類種別」「この呼び方 → この顧問先」を数えておき、
+// 同じ組み合わせで続けて確定されたものだけ、次の確定のときに「覚える」を提案する
+const SUGGEST_AFTER = 2;
+const MAX_STATS = 500;
+
+function recordConfirm(configPath, { title, docType, alias, clientCode }) {
+  const raw = readRaw(configPath);
+  const st = raw.learnStats = raw.learnStats || { titles: {}, aliases: {} };
+  const bump = (table, key, value) => {
+    if (!key || !value) return;
+    key = clean(key, 60);
+    if (!table[key] && Object.keys(table).length >= MAX_STATS) return; // 際限なく増やさない
+    const t = table[key] = table[key] || {};
+    t[value] = (t[value] || 0) + 1;
+  };
+  bump(st.titles, title, docType);
+  bump(st.aliases, alias, String(clientCode || ''));
+  writeRaw(configPath, raw);
+}
+
+function pick(t) {
+  if (!t) return null;
+  const keys = Object.keys(t);
+  if (!keys.length) return null;
+  keys.sort((a, b) => t[b] - t[a]);
+  // 別の答えで確定されたことがあるものは、提案しない(帳票の見分けがつかない可能性)
+  return { value: keys[0], count: t[keys[0]], conflict: keys.length > 1, ready: keys.length === 1 && t[keys[0]] >= SUGGEST_AFTER };
+}
+
+function learnHint(configPath, title, alias) {
+  const st = readRaw(configPath).learnStats || { titles: {}, aliases: {} };
+  return { title: title ? pick(st.titles[clean(title, 60)]) : null, alias: alias ? pick(st.aliases[clean(alias, 60)]) : null };
+}
+
+module.exports = { recordConfirm, learnHint, SUGGEST_AFTER, isSameOrInside, ensureConfig, getSettings, saveSettings, saveClients, titleOf, learnTitle, learnAlias, SettingsError, PERIOD_KINDS };

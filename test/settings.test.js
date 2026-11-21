@@ -157,3 +157,19 @@ test('顧問先の一覧を送らずに設定を保存しても、顧問先マ�
     assert.strictEqual(S.loadClients(path.join(dir, 'master.csv')).length, 4);
   } finally { server.close(); }
 });
+
+test('学習の提案:同じ表題・呼び方を続けて同じ答えで確定したら、次から「覚える」を提案する', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'learn-hint-'));
+  const cfg = path.join(dir, 'config.json');
+  fs.writeFileSync(cfg, JSON.stringify({ inbox: '受付', archive: '保管', clients: 'm.csv' }));
+  assert.deepStrictEqual(ST.learnHint(cfg, '月次報告書', 'さくら'), { title: null, alias: null });
+  ST.recordConfirm(cfg, { title: '月次報告書', docType: '月次試算表', alias: 'さくら', clientCode: '10001' });
+  assert.strictEqual(ST.learnHint(cfg, '月次報告書', '').title.ready, false, '1回だけでは提案しない');
+  ST.recordConfirm(cfg, { title: '月次報告書', docType: '月次試算表', alias: 'さくら', clientCode: '10001' });
+  const h = ST.learnHint(cfg, '月次報告書', 'さくら');
+  assert.deepStrictEqual([h.title.ready, h.title.value, h.title.count, h.alias.ready, h.alias.value], [true, '月次試算表', 2, true, '10001']);
+  // 別の答えで確定されたことがあれば、提案しない(見分けのつかない帳票の可能性)
+  ST.recordConfirm(cfg, { title: '月次報告書', docType: '決算書', alias: '', clientCode: '10001' });
+  const h2 = ST.learnHint(cfg, '月次報告書', 'さくら');
+  assert.deepStrictEqual([h2.title.ready, h2.title.conflict, h2.alias.ready], [false, true, true]);
+});

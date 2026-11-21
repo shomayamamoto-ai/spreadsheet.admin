@@ -141,6 +141,7 @@ function createServer(configPath) {
     for (const it of items) {
       it.title = await titleOfPdf(path.join(dir, it.file));
       it.aliasCandidate = it.clientName && masterNames.indexOf(it.clientName) < 0 ? it.clientName : '';
+      it.learnHint = ST.learnHint(configPath, it.title, it.aliasCandidate);
     }
     return items;
   }
@@ -172,11 +173,17 @@ function createServer(configPath) {
       return { needsForce: true, message: `同じ書類がすでにあります(${known[key]})。別の書類として保存する場合は、もう一度「確定」を押してください。` };
     }
     const learned = [];
+    const seenTitle = await titleOfPdf(src);
     if (body.learnTitle) {
-      const title = await titleOfPdf(src);
+      const title = seenTitle;
       if (title && ST.learnTitle(configPath, fields.docType, title)) learned.push(`表題「${title}」を「${fields.docType}」の目印として覚えました`);
     }
     if (body.learnAlias && ST.learnAlias(configPath, client.code, body.learnAlias)) learned.push(`「${body.learnAlias}」を ${client.code} ${client.name} の別名として覚えました`);
+    // 学習の提案のために、どの表題・呼び方をどう確定したかを数えておく(覚えるかどうかは人が決める)
+    try {
+      const seenAlias = typeof body.seenAlias === 'string' && body.seenAlias.length <= 60 ? body.seenAlias : '';
+      ST.recordConfirm(configPath, { title: seenTitle, docType: fields.docType, alias: seenAlias, clientCode: client.code });
+    } catch (e) { /* 数えられなくても確定は続ける */ }
     const names = X.suggestNames(fields, client, c.rules);
     const destDir = path.join(c.archive, ...names.folder);
     const dest = S.uniquePath(destDir, names.fileName);

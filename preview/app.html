@@ -96,6 +96,8 @@ main { padding: 20px; }
 .rec-actions { white-space: nowrap; }
 .rec-actions .inline-confirm { white-space: normal; min-width: 220px; margin-top: 6px; }
 .rec-actions button + button { margin-left: 6px; }
+.learn-why { display: block; font-size: 12px; color: var(--muted); margin-left: 1.6em; }
+.learn-why.warn { color: var(--warn); }
 .reason ul { margin: 4px 0 0; padding-left: 1.2em; }
 .reason li { margin: 2px 0; overflow-wrap: anywhere; }
 .reason-hint { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -606,8 +608,18 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
     var types = (info.docTypes || []).map(function (t) { return '<option' + (t === it.docType ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('');
     var learn = [];
     // 覚える内容は、ほかの書類の自動仕分けにも影響するため、標準ではオフ(人が意識して選ぶ)
-    if (it.title) learn.push('<label><input id="learn-title" type="checkbox"> 表題「' + esc(it.title) + '」を、選んだ書類種別の目印として覚える</label>');
-    if (it.aliasCandidate) learn.push('<label><input id="learn-alias" type="checkbox"> 「' + esc(it.aliasCandidate) + '」を、選んだ顧問先の別名として覚える</label>');
+    // これまでの確定で、同じ表題・呼び方がいつも同じ答えだったときは、チェックを入れて理由を添える(外すこともできる)
+    var hint = it.learnHint || {};
+    var why = function (h, label) {
+      if (!h) return '';
+      if (h.conflict) return '<span class="learn-why warn">これまで、別の' + label + 'で確定されたこともあります。覚えないことをおすすめします</span>';
+      if (h.ready) return '<span class="learn-why">これまで ' + h.count + ' 回、「' + esc(h.value) + '」として確定しています</span>';
+      return '';
+    };
+    var typeName = function (code) { var c = (info.clients || []).filter(function (x) { return String(x.code) === String(code); })[0]; return c ? c.code + ' ' + c.name : code; };
+    if (hint.alias && hint.alias.ready) hint.alias = Object.assign({}, hint.alias, { value: typeName(hint.alias.value) });
+    if (it.title) learn.push('<label><input id="learn-title" type="checkbox"' + (hint.title && hint.title.ready ? ' checked' : '') + '> 表題「' + esc(it.title) + '」を、選んだ書類種別の目印として覚える' + why(hint.title, '書類種別') + '</label>');
+    if (it.aliasCandidate) learn.push('<label><input id="learn-alias" type="checkbox"' + (hint.alias && hint.alias.ready ? ' checked' : '') + '> 「' + esc(it.aliasCandidate) + '」を、選んだ顧問先の別名として覚える' + why(hint.alias, '顧問先') + '</label>');
 
     $('review').innerHTML = '<div class="review">' +
       '<section class="card queue" aria-label="要確認の一覧"><div class="card-head"><h2>残り ' + reviewItems.length + ' 件</h2></div><ol>' + queue + '</ol></section>' +
@@ -661,7 +673,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
       var kind = info.docTypeKinds[$('f-type').value];
       var p = readPeriod(kind);
       var body = { file: it.file, docType: $('f-type').value, clientCode: clientCodeOf($('f-client').value), periodStart: p.start, periodEnd: p.end,
-        force: forceFile === it.file, learnTitle: !!($('learn-title') && $('learn-title').checked), learnAlias: $('learn-alias') && $('learn-alias').checked ? it.aliasCandidate : '' };
+        force: forceFile === it.file, learnTitle: !!($('learn-title') && $('learn-title').checked), learnAlias: $('learn-alias') && $('learn-alias').checked ? it.aliasCandidate : '', seenAlias: it.aliasCandidate || '' };
       $('btn-confirm').disabled = true;
       api('POST', '/api/confirm', body).then(function (r) {
         if (r.needsForce) { forceFile = it.file; toast(r.message, true); $('btn-confirm').disabled = false; $('btn-confirm').textContent = '別の書類として確定'; return; }
