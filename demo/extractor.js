@@ -34,7 +34,7 @@ var TaxDocExtractor = (function () {
     {
       id: 'financial',
       name: '決算書',
-      titleWords: ['決算報告書', '決算書'],
+      titleWords: ['決算報告書', '決算書', '貸借対照表', '損益計算書', '株主資本等変動計算書'],
       keywords: ['決算報告書', '決算書', '貸借対照表', '損益計算書', '株主資本等変動計算書', '個別注記表'],
       amountLabels: ['当期純利益', '当期純損失', '当期純損益'],
       periodKind: 'fiscal'
@@ -98,11 +98,19 @@ var TaxDocExtractor = (function () {
     {
       id: 'depreciable_assets',
       name: '償却資産申告書',
-      titleWords: ['償却資産申告書', '償却資産課税台帳'],
+      titleWords: ['償却資産申告書', '償却資産課税台帳', '種類別明細書'],
       keywords: ['償却資産申告書', '種類別明細書', '賦課期日'],
       amountLabels: [],
       periodKind: 'year',
       nendoIsYear: true // 「令和7年度」= 令和7年1月1日現在の申告
+    },
+    {
+      id: 'income_tax',
+      name: '所得税確定申告書',
+      titleWords: ['所得税及び復興特別所得税', '所得税の確定申告書', '青色申告決算書', '収支内訳書'],
+      keywords: ['所得税及び復興特別所得税', '申告納税額', '総所得金額', '課税される所得金額', '青色申告決算書', '収支内訳書', '事業所得'],
+      amountLabels: ['申告納税額'],
+      periodKind: 'year'
     },
     {
       id: 'notification',
@@ -152,7 +160,27 @@ var TaxDocExtractor = (function () {
       .replace(/\(株\)/g, '株式会社')
       .replace(/\(有\)/g, '有限会社')
       .replace(/\(同\)/g, '合同会社');
+    // 「R.6.10.1」「H.30.4.1」→ 令和・平成
+    t = t.replace(/(^|[^A-Za-z])R\.\s?(\d{1,2})(?=[.\/年])/g, '$1令和$2').replace(/(^|[^A-Za-z])H\.\s?(\d{1,2})(?=[.\/年])/g, '$1平成$2');
+    // 「令和 0 7 年」「1 0 日」のように、数字の間に空白が入ったもの(年・月・日の直前だけ)
+    t = t.replace(/(\d) (?=\d ?[年月日])/g, '$1');
+    // PDFによっては1文字ずつ空白が入る(「試 算 表」)。1文字+空白が3つ以上続くときだけつめる
+    t = t.replace(/(?<![一-龥々〆ぁ-んァ-ヶー])(?:[一-龥々〆ぁ-んァ-ヶー] ){2,}[一-龥々〆ぁ-んァ-ヶー](?![一-龥々〆ぁ-んァ-ヶー])/g, function (m) { return m.replace(/ /g, ''); });
     return t;
+  }
+
+  // 「- 1 -」「1/3」「2 頁」「Page 1」のような、ページ番号だけの行
+  function isPageNumber(l) {
+    var c = l.replace(/\s/g, '');
+    return /^[-‐ー—―]?\d{1,3}[-‐ー—―]?$/.test(c) || /^\d{1,3}\/\d{1,3}$/.test(c) ||
+      /^(?:第)?\d{1,3}(?:頁|ページ)(?:\/\d{1,3}(?:頁|ページ)?)?$/.test(c) || /^(?:P|Page|p)\.?\d{1,3}$/.test(c);
+  }
+
+  // 表の列が詰まって、名前のうしろに見出しの言葉がつながったものを切る(「さくら建設作成日:」)
+  function cutTrailingLabel(s) {
+    return s.replace(/(?:作成日|出力日|印刷日|作成年月日|会計期間|事業年度|課税期間|代表取締役|代表社員|代表者|顧問先コード|関与先コード)[\s\S]*$/, '')
+      .replace(/自(?=令和|平成|R\d|\d)[\s\S]*$/, '')
+      .replace(/自$/, '');
   }
 
   function compact(text) {
@@ -240,8 +268,39 @@ var TaxDocExtractor = (function () {
       return !/^第[\d\-()()]+号様式$/.test(c) && !/^様式第?[\d\-()()]+号?$/.test(c) &&
         !new RegExp('^' + DATE_RE_SRC + '[^一-龥ぁ-んァ-ヶ]{0,3}(?:[^\\s]{0,12}(?:税務署長|知事|市長|区長)殿?)?$').test(c);
     });
-    var title = compact(titleLines.slice(0, 2).join(''));
-    var head = compact(lines.slice(0, 6).join(''));
+    titleLines = titleLines.filter(function (l) { return !/[。]$|(?:ます|です|ください|ました)[。]?$/.test(l); });
+    var allTypes = types || DOC_TYPES;
+    var anyTitleWord = function (t) {
+      return allTypes.some(function (dt) { return (dt.titleWords || []).some(function (w) { return t.indexOf(w) >= 0; }); });
+    };
+    // 1行だけで「表題らしい」か:かっこ書き・「令和7年分の」を除いて、書類名で始まるか終わる短い行
+    var titleOf = function (l) {
+      return compact(l).replace(/[((][^))]*[))]/g, '').replace(/^(?:(?:令和|平成)\d{1,2}|20\d{2})年(?:分|度)?の?/, '');
+    };
+    var strictTitle = function (l, w) {
+      var c = titleOf(l);
+      // 末尾で一致してよいのは「〜書」「〜表」のような書類名だけ(「調査対象税目 法人税・消費税」を表題にしない)
+      return c.length <= 32 && c.indexOf('、') < 0 &&
+        (c.indexOf(w) === 0 || (/[書表帳票録簿届]$/.test(w) && c.slice(-w.length) === w));
+    };
+    var strictAny = function (l) {
+      return allTypes.some(function (dt) { return (dt.titleWords || []).some(function (w) { return strictTitle(l, w); }); });
+    };
+    // 表題:最初の2行(かっこ書きは除く)。無ければ3行目、それでも無ければ末尾6行の中の表題らしい行
+    var title = titleLines.slice(0, 2).map(titleOf).join('');
+    var fromTail = false, used = titleLines.slice(0, 2);
+    if (!anyTitleWord(title) && titleLines[2] && strictAny(titleLines[2])) { title = titleOf(titleLines[2]); used = titleLines.slice(0, 3); }
+    if (!anyTitleWord(title)) {
+      // 末尾6行のうち、いちばん最後に出てくる表題らしい行(見出しは最後にまとめて出力されることが多い)
+      var tail = titleLines.slice(-6).filter(strictAny);
+      if (tail.length) { title = titleOf(tail[tail.length - 1]); fromTail = true; used = [tail[tail.length - 1]]; }
+    }
+    // 様式名が「〜申請書」「〜届出書」で終わる書類は、中身に「源泉所得税」などがあっても届出書・申請書
+    var formTitle = /(?:申請書|届出書|届書)$/.test(titleOf(titleLines[0] || ''));
+    // 冒頭付近(見出しが最後に出力されたPDFでは、末尾付近)
+    var head = compact((fromTail ? lines.slice(-6) : lines.slice(0, 6)).join(''));
+    // 本文の途中に、別の書類の表題だけの行がある(複数の書類が1つのPDFにまとめられた可能性)
+    var bodyTitles = titleLines.filter(function (l) { return used.indexOf(l) < 0 && !/\d/.test(titleOf(l)) && strictAny(l); });
     var scores = (types || DOC_TYPES).map(function (dt) {
       var score = 0, hits = [];
       // 表題に「試算表」「決算報告書」などがあれば、それを最優先する
@@ -263,9 +322,11 @@ var TaxDocExtractor = (function () {
           hits.push(kw);
         }
       });
+      if (formTitle && dt.id === 'notification') { score += 40; hits.unshift('表題:様式名'); }
       var titled = hits.length > 0 && hits[0].indexOf('表題:') === 0;
       if (!titled) titled = dt.keywords.some(function (kw) { var k = compact(normalize(kw)); return k.length >= 3 && title.indexOf(k) >= 0; });
-      return { type: dt, score: score, hits: hits, titled: titled };
+      var inBody = bodyTitles.filter(function (l) { return (dt.titleWords || []).some(function (w) { return strictTitle(l, w); }); });
+      return { type: dt, score: score, hits: hits, titled: titled, bodyTitle: inBody[0] || '' };
     });
     scores.sort(function (a, b) { return b.score - a.score; });
     return scores;
@@ -283,17 +344,20 @@ var TaxDocExtractor = (function () {
       .replace(/^[\s::]+/, '')
       .split(/ {2,}|\s(?=[^\s]*(?:コード|番号|期間|作成日|自|至|殿|様|御中))/)[0]
       .replace(/(御中|殿|様)$/, '')
-      .trim();
+      .replace(/^/, '').trim().replace(/[\s\S]*/, function (v) { return cutTrailingLabel(v).trim(); });
   }
 
   function findClientName(lines) {
     var i, m, line;
     // 1) 「顧問先名:○○」のようにラベルがあるもの
-    var labelRe = /(顧問先名|関与先名|会社名|法人名|事業者名|氏名又は名称|名称|商号)\s*[::]?\s*(.+)/;
+    // 見出しの言葉は、行の先頭か空白の直後にあるものだけ(「資産の名称」などを拾わない)
+    var labelRe = /(?:^|\s)(名称及び代表者氏名|顧問先名|関与先名|会社名|法人名|事業者名|氏名又は名称|所有者名|名称|商号)\s*[::]?\s*(.+)/;
     for (i = 0; i < lines.length; i++) {
       m = lines[i].match(labelRe);
       if (m) {
         var v = cleanName(m[2]);
+        // 「名称 医療法人社団」で改行され、名前が次の行に続くもの
+        if (v && !nameKey(v) && lines[i + 1]) v = cleanName(m[2] + lines[i + 1]);
         if (v && !isOfficeName(v) && v.length <= 40) return { value: v, how: 'ラベル「' + m[1] + '」' };
       }
     }
@@ -308,7 +372,7 @@ var TaxDocExtractor = (function () {
     for (i = 0; i < lines.length; i++) {
       line = lines[i];
       m = line.match(corpRe);
-      if (m && !isOfficeName(m[1])) return { value: m[1].replace(/\s/g, ''), how: '法人格を含む名称' };
+      if (m && !isOfficeName(m[1])) return { value: cutTrailingLabel(m[1].replace(/\s/g, '')), how: '法人格を含む名称' };
     }
     return null;
   }
@@ -386,7 +450,7 @@ var TaxDocExtractor = (function () {
     lines.forEach(function (l) {
       (l.match(re) || []).forEach(function (n) {
         // 「山田商事と佐藤工業の取引」のように続く文は、助詞(漢字・カタカナの直後の と・の など)で切る
-        n = n.replace(/([一-龥々ァ-ヶー])(?:と|の|を|に|が|は|へ|で|及び|並びに)[\s\S]*$/, '$1');
+        n = cutTrailingLabel(n.replace(/([一-龥々ァ-ヶー])(?:と|の|を|に|が|は|へ|で|及び|並びに)[\s\S]*$/, '$1'));
         n.split(/(?=株式会社|有限会社|合同会社)/).forEach(function (part) {
           var k = nameKey(part); if (k.length >= 2 && out.indexOf(k) < 0) out.push(k);
         });
@@ -415,7 +479,10 @@ var TaxDocExtractor = (function () {
 
     // --- 候補を集める ---
     var ranges = [];
-    all(new RegExp(d + '(?:まで)?(?:至|~|〜|～|から|-)' + d, 'g')).forEach(function (m) {
+    var rangeMatches = all(new RegExp(d + '(?:まで)?(?:至|~|〜|～|から|-)' + d, 'g'));
+    if (!rangeMatches.length) rangeMatches = all(new RegExp('自' + d + '[^自至\\d]{1,20}?至' + d, 'g')).map(function (m) {
+      var x = m.slice(); x.index = m.index + 1; return x; });
+    rangeMatches.forEach(function (m) {
       var s = toDate(m, 1), e = toDate(m, 6);
       if (!s || !e) return;
       var granular = !s.d && !e.d; // 「7月から12月分」のように、月単位で書かれた範囲
@@ -447,7 +514,8 @@ var TaxDocExtractor = (function () {
       .concat(all(/(^|[^\d\/.\-])(20\d{2})[\/.](\d{1,2})(?![\d\/.\-日年])/g).map(function (m) {
         var mo = parseInt(m[3], 10); return mo >= 1 && mo <= 12 ? monthOf(parseInt(m[2], 10), mo) : null; }))
       .filter(Boolean);
-    var years = all(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年分/g).map(function (m) {
+    var years = all(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年分|(?:対象年|年分)[::]?(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年/g).map(function (m) {
+      if (!m[1] && !m[3]) m = [m[0], m[4], m[5], m[6]];
       var y = m[3] ? parseInt(m[3], 10) : ERA[m[1]] + (m[2] === '元' ? 1 : parseInt(m[2], 10));
       return { start: { y: y, m: 1, d: 1 }, end: { y: y, m: 12, d: 31 }, kind: 'year' };
     });
@@ -636,12 +704,33 @@ var TaxDocExtractor = (function () {
   // メイン:文字列 → 抽出結果
   // options.clients : 顧問先マスタ [{code, name, aliases, fiscalEndMonth}]
   // ------------------------------------------------------------
+  function withholdingMonth(lines) {
+    var yy = null, found = {};
+    lines.forEach(function (l) {
+      var y = l.match(/(?:^|\s)年度\s*(\d{2})(?!\d)/); if (y) yy = parseInt(y[1], 10);
+      var g = l.match(/(?:給与等|賞与|報酬|退職手当等?|料金)\s+(\d{2})\s+(\d{1,2})\s+(\d{1,2})\s+\d/);
+      if (g) found[g[1] + '-' + g[2]] = [parseInt(g[1], 10), parseInt(g[2], 10)];
+    });
+    var keys = Object.keys(found);
+    if (keys.length !== 1) return null;
+    var ry = found[keys[0]][0], mo = found[keys[0]][1];
+    if ((yy !== null && yy !== ry) || mo < 1 || mo > 12) return null;
+    var y = ERA['令和'] + ry;
+    return { start: { y: y, m: mo, d: 1 }, end: { y: y, m: mo, d: lastDayOfMonth(y, mo) }, kind: 'month' };
+  }
+
+  // 月次試算表と決算書は、どちらにも「貸借対照表」「損益計算書」の見出しが出てくるので、同じ仲間として扱う
+  function sameFamily(a, b) {
+    var fam = { monthly: 'fs', financial: 'fs' };
+    return a === b || (fam[a] && fam[a] === fam[b]);
+  }
+
   function extract(rawText, options) {
     options = options || {};
     var text = normalize(rawText);
     var lines = text.split('\n').map(function (l) { return l.replace(/ +/g, ' ').trim(); })
-      .filter(function (l) { return l.length > 0; });
-    var flat = compact(text);
+      .filter(function (l) { return l.length > 0 && !isPageNumber(l); });
+    var flat = compact(lines.join('\n'));
     var issues = [], issueCodes = [];
     // 問題の中身(文章)と、種類を表す記号を一緒に記録する
     var addIssue = function (code, msg) { issueCodes.push(code); issues.push(msg); };
@@ -654,6 +743,12 @@ var TaxDocExtractor = (function () {
     if (!docType) addIssue('type_missing', '書類種別を判定できません');
     else if (second && second.score > 0 && top.score - second.score < 4) {
       addIssue('type_ambiguous', '書類種別が「' + top.type.name + '」か「' + second.type.name + '」か紛らわしい');
+    } else if (/送付状|送付書|送付のご案内|お送りいたします|お送りします|ご査収/.test(flat)) {
+      // 送付状・添え状は、書類名が書かれていても、その書類そのものではない
+      addIssue('type_ambiguous', '送付状(添え状)の可能性があります。中身の書類か確かめてください');
+    } else if (ranking.some(function (r) { return r !== top && r.bodyTitle && !sameFamily(r.type.id, top.type.id); })) {
+      var other = ranking.filter(function (r) { return r !== top && r.bodyTitle && !sameFamily(r.type.id, top.type.id); })[0];
+      addIssue('type_ambiguous', '別の書類(「' + other.bodyTitle + '」)が同じPDFに含まれている可能性があります');
     } else if (!top.titled) {
       // 表題(最初の2行)に書類名が無い。本文の言葉だけでは決めない(送付状や、対応していない書類の可能性)
       addIssue('type_ambiguous', '表題から書類種別を確認できません(本文の言葉からは「' + top.type.name + '」の可能性)');
@@ -685,6 +780,14 @@ var TaxDocExtractor = (function () {
         return lines.some(function (l) { return ks.indexOf(nameKey(l.replace(/(御中|殿|様)\s*$/, ''))) >= 0; });
       });
       if (others.length) addIssue('client_ambiguous', '別の顧問先(' + others.map(function (c) { return c.name; }).join('、') + ')の名前も、見出しとして書かれています');
+      // 個人の顧問先の名前が本文に出てくる(源泉徴収票の受給者など、どちらの書類か決められない)
+      var persons = options.clients.filter(function (c) {
+        if (String(c.code) === String(master.code) || others.indexOf(c) >= 0) return false;
+        if (CORP_FORMS.some(function (f) { return String(c.name).indexOf(f) >= 0; })) return false;
+        var k = nameKey(c.name);
+        return k.length >= 3 && flat.indexOf(k) >= 0;
+      });
+      if (persons.length) addIssue('client_ambiguous', '別の顧問先(' + persons.map(function (c) { return c.name; }).join('、') + ')の名前も書かれています。どちらの書類か確かめてください');
     }
     if (master) {
       if (!code) code = String(master.code);
@@ -702,8 +805,16 @@ var TaxDocExtractor = (function () {
     if (docType && docType.periodKind === 'date' && created && created.d) {
       period = { start: created, end: created, kind: 'point' };
     }
+    // 源泉所得税の徴収高計算書(納付書)は「年度 08」「支給年月日 08 09 30」のように和暦の数字だけで書かれる
+    if (!period && docType && docType.id === 'withholding') period = withholdingMonth(lines);
     if (!period) addIssue('period_missing', '対象期間が見つかりません');
     else if (period.conflict) addIssue('period_ambiguous', '対象期間の書き方が食い違っています(' + period.conflict + ')');
+    else if (docType && docType.periodKind === 'fiscal' && master && master.fiscalEndMonth && period.start &&
+      (period.end.y - period.start.y) * 12 + (period.end.m - period.start.m) + 1 >= 12 &&
+      period.end.m !== parseInt(master.fiscalEndMonth, 10)) {
+      // 決算期の変更などもありうるので、自動では決めない
+      addIssue('period_ambiguous', '事業年度の終わり(' + period.end.m + '月)が、顧問先マスタの決算月(' + master.fiscalEndMonth + '月)と違います');
+    }
     var term = findTerm(flat);
 
     // 金額

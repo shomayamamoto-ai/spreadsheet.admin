@@ -403,9 +403,9 @@ input[type="number"] { width: 6.5em; text-align: right; font-variant-numeric: ta
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- 読み取り処理をページ内で動かすため、worker 本体も通常のスクリプトとして読み込む(別ドメインのWorkerが使えない環境への対策) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-<script src="extractor.js"></script>
-<script src="pdftext.js"></script>
-<script src="privacy.js"></script>
+<script src="extractor.js" charset="utf-8"></script>
+<script src="pdftext.js" charset="utf-8"></script>
+<script src="privacy.js" charset="utf-8"></script>
 <script>
 (function () {
   'use strict';

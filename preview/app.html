@@ -93,6 +93,10 @@ main { padding: 20px; }
 .field .ng { color: var(--err); }
 .reason { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; }
 .reason b { display: block; }
+.reason ul { margin: 4px 0 0; padding-left: 1.2em; }
+.reason li { margin: 2px 0; overflow-wrap: anywhere; }
+.reason-hint { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.reason-hint::before { content: '→ '; }
 .period-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .period-row input[type="month"], .period-row input[type="date"] { flex: 1 1 140px; }
 .period-row input[type="number"] { width: 110px; }
@@ -323,9 +327,9 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-<script src="extractor.js"></script>
-<script src="pdftext.js"></script>
-<script src="mock.js"></script>
+<script src="extractor.js" charset="utf-8"></script>
+<script src="pdftext.js" charset="utf-8"></script>
+<script src="mock.js" charset="utf-8"></script>
 <script>
 (function () {
   'use strict';
@@ -375,6 +379,29 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
     }).catch(function (e) { toast(e.message, true); });
   }
   var UNDO = { label: '元に戻す', fn: undoLast };
+  // 確認が必要な理由を1つずつ並べ、それぞれに「どうすればよいか」を添える
+  var REASON_HINTS = [
+    [/顧問先マスタに登録がありません/, '新しい顧問先なら「設定」の顧問先マスタに追加します。略称の違いだけなら、顧問先を選んで下の「別名として覚える」にチェックします'],
+    [/送付状/, '送付状だけのPDFなら「除外」。同じPDFに中身の書類も入っているなら、その書類として確定します'],
+    [/複数の顧問先|別の顧問先/, '1つのPDFに2社分が入っていないか、PDFで確かめてください。入っていれば、分けて受付フォルダに入れ直します'],
+    [/期間.*(食い違|紛らわし|見つかりません)|対象期間/, 'PDFの見出しと集計期間を見比べて、正しい期間を入れてください'],
+    [/表題から書類種別を確認できません/, '書類種別を選び、いつも同じ帳票なら「表題を目印として覚える」にチェックすると、次から自動で読めます。仕分けの対象外の書類なら「除外」します'],
+    [/紛らわしい/, 'PDFの表題を見て、書類種別を選んでください'],
+    [/書類種別を判定できません/, 'PDFを見て書類種別を選んでください。事務所独自の帳票なら「設定」の「書類種別を追加」で登録すると、次から自動で読めます。仕分けの対象外の書類なら「除外」します'],
+    [/顧問先名が見つかりません|顧問先.*読め/, 'PDFを見て顧問先を選んでください。書類での呼び方がいつも同じなら、「別名として覚える」を使います'],
+    [/画像のPDF|文字起こし|文字が少な/, 'スキャンした書類です。PDFを見て内容を入力してください'],
+    [/同じ書類がすでにあります/, '同じものなら「除外」、作り直した版なら確定します(上書きはされません)'],
+    [/ファイルを移動できませんでした/, 'PDFを開いているソフトを閉じて、もう一度確定してください']
+  ];
+  function reasonBox(memo) {
+    var items = String(memo).split(' / ').filter(Boolean).map(function (m) {
+      var hint = '';
+      for (var i = 0; i < REASON_HINTS.length; i++) if (REASON_HINTS[i][0].test(m)) { hint = REASON_HINTS[i][1]; break; }
+      return '<li>' + esc(m) + (hint ? '<span class="reason-hint">' + esc(hint) + '</span>' : '') + '</li>';
+    }).join('');
+    return '<div class="reason"><b>確認が必要な理由</b><ul>' + items + '</ul></div>';
+  }
+
   function pill(s) {
     var cls = s === 'OK' || s === '確定済み' ? 'ok' : s === 'エラー' ? 'err' : s === '除外' ? 'mute' : 'warn';
     return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
@@ -582,7 +609,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
         '<a href="/api/pdf?file=' + encodeURIComponent(it.file) + '" target="_blank" rel="noopener">新しいタブで開く</a></div>' +
         '<iframe title="PDFの中身" src="/api/pdf?file=' + encodeURIComponent(it.file) + '#view=FitH"></iframe></section>' +
       '<section class="card form" aria-label="内容の入力"><div class="form-body">' +
-        (it.memo ? '<div class="reason"><b>確認が必要な理由</b>' + esc(it.memo) + '</div>' : '') +
+        (it.memo ? reasonBox(it.memo) : '') +
         '<label class="field" for="f-type"><span>書類種別</span><select id="f-type"><option value="">選んでください</option>' + types + '</select></label>' +
         '<label class="field" for="f-client"><span>顧問先</span><input id="f-client" list="client-list" autocomplete="off" placeholder="コードか名前を入力して選ぶ" value="' + esc(clientNow ? clientNow.code + ' ' + clientNow.name : '') + '"><span class="sub" id="f-client-note"></span></label>' +
         '<div class="field"><span>対象期間</span><div id="f-period"></div></div>' +

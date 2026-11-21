@@ -38,9 +38,9 @@ const page = `<title>${BRAND.name} 画面プレビュー</title>
 ${body.replace(/__PRODUCT__/g, BRAND.name).replace(/__SUPPORT__/g, '')}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-<script src="extractor.js"></script>
-<script src="pdftext.js"></script>
-<script src="mock.js"></script>
+<script src="extractor.js" charset="utf-8"></script>
+<script src="pdftext.js" charset="utf-8"></script>
+<script src="mock.js" charset="utf-8"></script>
 <script>${script.replace('__TOKEN__', 'preview')}</script>
 `;
 fs.writeFileSync(path.join(out, 'app.html'), page);

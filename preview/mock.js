@@ -12,7 +12,8 @@
   var fetchOrig = window.fetch.bind(window); // 本物の fetch(サンプルPDFの読み込みに使う)
   var X = window.TaxDocExtractor;
   var pdfjsLib = window['pdfjs-dist/build/pdf'];
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  // PDFを読む部品(CDN)が読み込めなくても、画面の操作は続けられるようにする
+  if (pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
   var HEADERS = ['処理日時', 'ステータス', '判定方法', '書類種別', '顧問先コード', '顧問先名', '対象期間(開始)', '対象期間(終了)', '作成日', '金額の項目', '金額', '新ファイル名', '保存先フォルダ', '元のファイル名', 'AIで補った項目', '確認メモ'];
   var REVIEW = '_要確認', DUP = '_重複(削除候補)';
