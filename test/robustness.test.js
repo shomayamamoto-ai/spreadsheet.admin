@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const path = require('node:path');
 const { run } = require('../scripts/robustness.js');
 
-for (const file of ['corpus.js', 'corpus_blind.js', 'corpus_blind2.js', 'corpus_blind3.js']) {
+for (const file of ['corpus.js', 'corpus_blind.js', 'corpus_blind2.js', 'corpus_blind3.js', 'corpus_blind4.js']) {
   test(`崩れを加えても誤って自動仕分けしない(${file})`, () => {
     const r = run(path.join(__dirname, 'fixtures', file));
     const bad = r.rows.filter((x) => x.wrong > 0);

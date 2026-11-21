@@ -288,6 +288,9 @@ var TaxDocExtractor = (function () {
     // (「法人税の課税標準 27,412,000」「調査対象税目 法人税・消費税」のような本文の行は表題にしない)
     var strictTitle = function (l, w) {
       var c = titleOf(l);
+      // 「1 給与所得の源泉徴収票合計表(375)」のような、番号や数字のある本文の行は表題にしない
+      var raw = l.replace(/[((][^))]*[))]/g, '').replace(/^(?:(?:令和|平成)\s?\d{1,2}|20\d{2})\s?年(?:分|度)?の?\s*/, '');
+      if (/\d/.test(raw)) return false;
       return c.length <= 32 && c.indexOf('、') < 0 && c.indexOf(w) >= 0 &&
         (/[書表帳票録簿届]$/.test(c) || /^別表[一二三四五六七八九十]/.test(c));
     };
@@ -319,7 +322,11 @@ var TaxDocExtractor = (function () {
     // 冒頭付近(見出しが最後に出力されたPDFでは、末尾付近)
     var head = compact((fromTail ? lines.slice(-6) : lines.slice(0, 6)).join(''));
     // 本文の途中に、別の書類の表題だけの行がある(複数の書類が1つのPDFにまとめられた可能性)
-    var bodyTitles = titleLines.filter(function (l) { return used.indexOf(l) < 0 && !/\d/.test(titleOf(l)) && strictAny(l); });
+    // (「帳簿組織の状況 総勘定元帳・仕訳帳」のような、見出しと値が並ぶ行や、書類名を並べた行は除く)
+    var bodyTitles = titleLines.filter(function (l) {
+      var raw = l.replace(/[((][^))]*[))]/g, '').trim();
+      return used.indexOf(l) < 0 && !/\d/.test(titleOf(l)) && !/\s|・/.test(raw) && strictAny(l);
+    });
     var scores = (types || DOC_TYPES).map(function (dt) {
       var score = 0, hits = [];
       // 表題に「試算表」「決算報告書」などがあれば、それを最優先する
@@ -372,7 +379,7 @@ var TaxDocExtractor = (function () {
     var i, m, line;
     // 1) 「顧問先名:○○」のようにラベルがあるもの
     // 見出しの言葉は、行の先頭か空白の直後にあるものだけ(「資産の名称」などを拾わない)
-    var labelRe = /(?:^|\s)(名称及び代表者氏名|顧問先名|関与先名|会社名|法人名|事業者名|氏名又は名称|所有者名|名称|商号)\s*[::]?\s*(.+)/;
+    var labelRe = /(?:^|\s)(名称及び代表者氏名|顧問先名|関与先名|会社名|法人名等|法人名|事業者名|氏名又は名称|所有者名|名称|商号)\s*[::]?\s*(.+)/;
     for (i = 0; i < lines.length; i++) {
       m = lines[i].match(labelRe);
       if (m) {
@@ -512,7 +519,9 @@ var TaxDocExtractor = (function () {
       if (fmtDate(s) > fmtDate(e)) return;
       var before = flat.slice(Math.max(0, m.index - 10), m.index);
       ranges.push({ start: s, end: e, kind: 'range', granular: granular,
-        prev: /前期|前年|前事業年度|中間申告対象期間$|中間申告対象期間自$/.test(before),
+        prev: /前期|前年|前事業年度|前課税期間|前々|基準期間|特定期間|中間申告対象期間$|中間申告対象期間自$/.test(before) ||
+          // 「基準期間の課税売上高 20,915,000(自…至…)」のように、見出しと期間が離れているもの
+          /(?:基準期間|前課税期間|特定期間)[^至]{0,24}$/.test(flat.slice(Math.max(0, m.index - 30), m.index)),
         cur: /当期|課税期間|事業年度|会計期間/.test(before) });
     });
     var fiscalEnds = all(new RegExp(YM + '期', 'g')).map(function (m) {
@@ -550,6 +559,12 @@ var TaxDocExtractor = (function () {
     var fiscalPick = function () {
       var list = ranges.filter(function (r) { return !r.prev; });
       var cur = list.filter(function (r) { return r.cur; });
+      // 前期・当期の区別なく、1年分の事業年度が2通り書かれているときは、どちらか決めない
+      var years12 = distinct(list.filter(isFullYear));
+      if (years12.length > 1) {
+        var pickY = latest(years12);
+        return Object.assign({}, pickY, { conflict: '「' + years12.map(function (r) { return fmtDate(r.start) + '〜' + fmtDate(r.end); }).join('」と「') + '」' });
+      }
       if (cur.length) return latest(cur);
       if (list.length) return latest(list);
       if (fiscalEnds.length) return latest(fiscalEnds);
