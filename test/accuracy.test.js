@@ -39,3 +39,16 @@ test('初見セット2:読めるはずの書類を、要確認に回しすぎな
   const s = score(false, BLIND2);
   assert.ok(s.missed <= 2, `読めずに要確認になった書類が ${s.missed} 件あります\n` + s.lines.join('\n'));
 });
+
+// 初見セット3:法人住民税の申告書・通知書・証明書など、対象外なのに言葉が似ている書類
+const BLIND3 = path.join(__dirname, 'fixtures', 'corpus_blind3.js');
+
+test('初見セット3:紛らわしい対象外の書類を、誤って自動で仕分けない', () => {
+  const s = score(false, BLIND3);
+  assert.strictEqual(s.wrongAuto, 0, s.lines.join('\n'));
+});
+
+test('初見セット3:読めるはずの書類を、要確認に回しすぎない', () => {
+  const s = score(false, BLIND3);
+  assert.ok(s.missed <= 2, `読めずに要確認になった書類が ${s.missed} 件あります\n` + s.lines.join('\n'));
+});

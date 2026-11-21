@@ -207,6 +207,27 @@ function createServer(configPath) {
     return { ok: true, message: `${a.kind}を取り消し、「要確認」に戻しました`, file: path.basename(back) };
   }
 
+  // 自動で仕分けた(または確定した)書類が間違っていたとき、記録から「要確認」に戻す
+  function reopen(body, user) {
+    const c = cfg();
+    if (state.running) throw new UserError('ただいま仕分けを実行中です。終わってから操作してください');
+    const archive = path.resolve(c.archive);
+    const src = path.resolve(archive, String(body.folder || ''), String(body.fileName || ''));
+    const top = path.relative(archive, src).split(path.sep)[0];
+    // 保存先フォルダの中のPDFだけ(「_要確認」「削除候補」や、保存先の外は対象にしない)
+    if (!src.startsWith(archive + path.sep) || [S.REVIEW, DUP_FOLDER].indexOf(top) >= 0 || !/\.pdf$/i.test(src)) throw new UserError('この書類は戻せません');
+    if (!fs.existsSync(src)) throw new UserError('書類が見つかりません(すでに移動または名前の変更がされています)');
+    const reason = String(body.reason || '').replace(/[\r\n]+/g, ' ').slice(0, 100);
+    const original = String(body.originalName || '') || path.basename(src);
+    const back = S.uniquePath(path.join(archive, S.REVIEW), path.basename(original));
+    S.moveFile(src, back);
+    S.appendLog(c.archive, [[S.nowText(), '取り消し', `記録から戻した(${user.name})`, body.docType || '', body.clientCode || '', body.clientName || '',
+      body.periodStart || '', body.periodEnd || '', '', '', '', path.basename(back), S.REVIEW, original, '',
+      '仕分け先が違うため、記録から「要確認」に戻しました' + (reason ? `(${reason})` : '') + '。正しい内容で確定してください']]);
+    audit(user, '要確認に戻す', path.relative(archive, src), reason);
+    return { ok: true, message: '「要確認」に戻しました。正しい内容で確定してください', file: path.basename(back) };
+  }
+
   function exclude(body, user) {
     const c = cfg();
     if (state.running) throw new UserError('ただいま仕分けを実行中です。終わってから操作してください');
@@ -443,6 +464,7 @@ function createServer(configPath) {
         if (url.pathname === '/api/confirm') return send(200, await confirm(body, user));
         if (url.pathname === '/api/exclude') return send(200, exclude(body, user));
         if (url.pathname === '/api/undo') return send(200, undo(user));
+        if (url.pathname === '/api/reopen') return send(200, reopen(body, user));
         if (url.pathname === '/api/password') {
           if (user.id === LOCAL_OWNER.id) throw new UserError('このパソコンの管理者には、パスワードがありません');
           U.authenticate(configPath, user.id, body.current); // 今のパスワードの確認

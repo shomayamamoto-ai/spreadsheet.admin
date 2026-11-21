@@ -167,6 +167,22 @@ test('操作画面:安全のための作りと、要確認の確定・除外の�
     assert.ok((await request(port, 'POST', '/api/undo', { token, body: {} })).json.ok);
     assert.ok((await request(port, 'POST', '/api/exclude', { token, body: { file: 'scan_0009.pdf' } })).json.ok);
 
+    // 自動で仕分けた書類が間違っていたら、記録から「要確認」に戻せる(保存先の外や、要確認フォルダは対象外)
+    const filed = (await request(port, 'GET', '/api/records?status=filed')).json.items.find((x) => x.status === 'OK');
+    for (const bad of [{ folder: '..', fileName: 'config.json' }, { folder: '_要確認', fileName: 'scan_0007.pdf' }, { folder: filed.folder, fileName: 'nai.pdf' }]) {
+      assert.strictEqual((await request(port, 'POST', '/api/reopen', { token, body: bad })).status, 400, JSON.stringify(bad));
+    }
+    assert.strictEqual((await request(port, 'POST', '/api/reopen', { body: filed })).status, 403, '合言葉(CSRF)なしは拒否');
+    const ro = await request(port, 'POST', '/api/reopen', { token, body: Object.assign({ reason: '顧問先が違う' }, filed) });
+    assert.strictEqual(ro.status, 200, ro.text);
+    assert.ok(!fs.existsSync(path.join(dir, '保管', filed.folder, filed.fileName)));
+    const reopened = (await request(port, 'GET', '/api/review')).json.items.find((x) => x.file === ro.json.file);
+    assert.ok(reopened && /顧問先が違う/.test(reopened.memo), JSON.stringify(reopened));
+    // 戻した書類は、同じ内容で確定し直せる(重複あつかいにならない)
+    const again = (await request(port, 'POST', '/api/confirm', { token, body: { file: ro.json.file, docType: filed.docType, clientCode: filed.clientCode, periodStart: filed.periodStart, periodEnd: filed.periodEnd } })).json;
+    assert.ok(again.ok, JSON.stringify(again));
+    assert.match(fs.readFileSync(path.join(dir, '保管', '操作履歴.csv'), 'utf8'), /要確認に戻す/);
+
     const csv = fs.readFileSync(path.join(dir, '保管', '書類一覧.csv'), 'utf8');
     assert.match(csv, /確定済み,人が確定\(このパソコンの管理者\),月次試算表,10003/);
     assert.match(csv, /除外,人が判断/);

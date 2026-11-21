@@ -7,25 +7,39 @@
 var PdfText = (function () {
   'use strict';
 
+  // 文字の向き(度)。横書き=0、90度回して描かれた横向きの帳票=90 など
+  function angleOf(t) {
+    var a = Math.round(Math.atan2(t[1], t[0]) * 180 / Math.PI);
+    return ((a % 360) + 360) % 360;
+  }
+
   function itemsToText(items) {
+    var list = items.filter(function (it) { return it.str && it.str.trim(); });
+    // いちばん多い文字の向きに合わせて座標を回し、「見た目の行」を作る
+    // (横向きの帳票を回転させて描いたPDFでも、行がばらばらにならないように)
+    var count = {};
+    list.forEach(function (it) { var a = angleOf(it.transform); count[a] = (count[a] || 0) + it.str.length; });
+    var main = Object.keys(count).sort(function (a, b) { return count[b] - count[a]; })[0];
+    var rad = (parseFloat(main) || 0) * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
     var rows = [];
-    items.forEach(function (it) {
-      if (!it.str || !it.str.trim()) return;
-      var x = it.transform[4], y = it.transform[5];
-      var h = Math.abs(it.transform[3]) || 10;
+    list.forEach(function (it) {
+      var t = it.transform;
+      var x = t[4] * cos + t[5] * sin, y = -t[4] * sin + t[5] * cos;
+      var h = Math.hypot(t[2], t[3]) || 10;
       var row = null;
       for (var i = 0; i < rows.length; i++) {
-        if (Math.abs(rows[i].y - y) < h * 0.5) { row = rows[i]; break; }
+        if (Math.abs(rows[i].y - y) < Math.min(rows[i].h, h) * 0.5) { row = rows[i]; break; }
       }
-      if (!row) { row = { y: y, parts: [] }; rows.push(row); }
-      row.parts.push({ x: x, w: it.width || 0, s: it.str });
+      if (!row) { row = { y: y, h: h, parts: [] }; rows.push(row); }
+      row.parts.push({ x: x, w: it.width || 0, s: it.str, h: h });
     });
     rows.sort(function (a, b) { return b.y - a.y; }); // 上から順に
     return rows.map(function (r) {
       r.parts.sort(function (a, b) { return a.x - b.x; });
       var out = '', prevEnd = null;
       r.parts.forEach(function (p) {
-        if (prevEnd !== null && p.x - prevEnd > 4) out += '  ';
+        // 文字の大きさに対して離れているときだけ、列の区切りとして空白を入れる
+        if (prevEnd !== null && p.x - prevEnd > Math.max(4, p.h * 0.6)) out += '  ';
         out += p.s;
         prevEnd = p.x + p.w;
       });

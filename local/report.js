@@ -36,7 +36,7 @@ header { padding: 28px 0 14px; border-bottom: 2px solid var(--accent); display: 
 h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: .04em; font-feature-settings: "palt"; }
 h2 { margin: 0 0 10px; font-size: 16px; font-weight: 800; }
 .sub { color: var(--muted); font-size: 13px; }
-.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; min-width: 0; }
 .tile em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); }
 .tile strong { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 28px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
@@ -146,7 +146,7 @@ function summarizeLog(rows, headers, opts) {
   const col = (r, name) => r[headers.indexOf(name)] || '';
   const PROCESSED = { OK: 'auto', '要確認': 'human', '重複の疑い': 'human', 'エラー': 'human' };
   const months = {}, types = {};
-  let auto = 0, human = 0, confirmed = 0, excluded = 0;
+  let auto = 0, human = 0, confirmed = 0, excluded = 0, reopened = 0;
   for (const r of rows) {
     const month = col(r, '処理日時').slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(month)) continue;
@@ -158,13 +158,15 @@ function summarizeLog(rows, headers, opts) {
     else if (PROCESSED[st] === 'human') { m.human++; human++; }
     else if (st === '確定済み') { m.confirmed++; confirmed++; }
     else if (st === '除外') excluded++;
+    // 自動で仕分けたあと、職員が「記録」から要確認に戻した = 実際の運用で見つかった自動仕分けの誤り
+    else if (st === '取り消し' && /^記録から戻した/.test(col(r, '判定方法'))) reopened++;
     const dt = col(r, '書類種別');
     if (dt && (st === 'OK' || st === '確定済み')) {
       const t = types[dt] = types[dt] || { name: dt, count: 0, auto: 0 };
       t.count++; if (st === 'OK') t.auto++;
     }
   }
-  return { months: Object.values(months).sort((a, b) => a.month.localeCompare(b.month)), types: Object.values(types).sort((a, b) => b.count - a.count), auto, human, confirmed, excluded };
+  return { months: Object.values(months).sort((a, b) => a.month.localeCompare(b.month)), types: Object.values(types).sort((a, b) => b.count - a.count), auto, human, confirmed, excluded, reopened };
 }
 
 function effectReport(sum, opts) {
@@ -177,6 +179,7 @@ function effectReport(sum, opts) {
   <div class="tile"><em>自動で仕分けた割合</em><strong>${pct(sum.auto, total)}</strong><small>%</small><span class="note">${num(sum.auto)}件を人の手を使わずに仕分け</span></div>
   <div class="tile"><em>削減できた時間(目安)</em><strong>${num(hours)}</strong><small>時間</small><span class="note">1件${minutes}分として計算(仮定)</span></div>
   <div class="tile"><em>人が確認した書類</em><strong>${num(sum.human)}</strong><small>件</small><span class="note">うち確定 ${num(sum.confirmed)}件・除外 ${num(sum.excluded)}件</span></div>
+  <div class="tile"><em>あとで直した自動仕分け</em><strong class="${sum.reopened ? 'ng' : 'ok'}">${num(sum.reopened || 0)}</strong><small>件</small><span class="note">職員が「記録」から要確認に戻した件数(実際の運用での誤り)</span></div>
 </div>`;
   const table = `<details><summary>表で見る(月ごとの件数)</summary><div class="scroll"><table><thead><tr><th>月</th><th>自動で仕分け</th><th>人が確認</th><th>合計</th><th>自動の割合</th><th>人が確定</th></tr></thead><tbody>${
     sum.months.map((m) => `<tr><td>${esc(m.month)}</td><td class="n">${num(m.auto)}</td><td class="n">${num(m.human)}</td><td class="n">${num(m.auto + m.human)}</td><td class="n">${pct(m.auto, m.auto + m.human)}%</td><td class="n">${num(m.confirmed)}</td></tr>`).join('')

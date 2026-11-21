@@ -32,7 +32,8 @@
     inbox: [],                    // { name, bytes, text }
     review: [],                   // { file, bytes, text }
     log: [],                      // 書類一覧.csv の行
-    archive: [],                  // 保存先にあるファイル
+    archive: [],
+    filed: {},                    // 保存先にある書類の中身(記録から「要確認」に戻すとき用)                  // 保存先にあるファイル
     audit: [],
     last: null,
     autoRunMinutes: 0,
@@ -115,7 +116,7 @@
       rows.push(row);
       if (apply) {
         state.log.push(row);
-        if (r.status === 'OK') state.archive.push(folder + '/' + file);
+        if (r.status === 'OK') { state.archive.push(folder + '/' + file); state.filed[folder + '/' + file] = { file: doc.name, bytes: doc.bytes, text: doc.text }; }
         if (r.status !== 'OK') state.review.push({ file: file, bytes: doc.bytes, text: doc.text });
       } else keep.push(doc);
     });
@@ -166,6 +167,7 @@
     var folder = n.folder.join('/');
     var file = uniqueName(n.fileName, state.archive.filter(function (x) { return x.indexOf(folder + '/') === 0; }).map(function (x) { return x.slice(folder.length + 1); }));
     state.archive.push(folder + '/' + file);
+    state.filed[folder + '/' + file] = state.review[idx];
     state.undo = { kind: '確定', doc: state.review[idx], fields: fields, dest: folder + '/' + file };
     state.review.splice(idx, 1);
     state.log.push([now(), '確定済み', '人が確定(' + USER.name + ')', fields.docType, fields.clientCode, fields.clientName, fields.periodStart, fields.periodEnd, '', '', '', file, folder, body.file, '', '']);
@@ -182,6 +184,18 @@
     state.log.push([now(), '取り消し', '取り消し(' + USER.name + ')', f.docType || '', f.clientCode || '', f.clientName || '', f.periodStart || '', f.periodEnd || '', '', '', '', a.doc.file, REVIEW, a.doc.file, '', a.kind + 'を取り消しました。内容を確認して、もう一度確定してください']);
     state.undo = null;
     return json({ ok: true, message: a.kind + 'を取り消し、「要確認」に戻しました', file: a.doc.file });
+  }
+
+  function reopen(body) {
+    var key = body.folder + '/' + body.fileName, doc = state.filed[key];
+    if (!doc || state.archive.indexOf(key) < 0) return fail('書類が見つかりません(すでに移動または名前の変更がされています)');
+    state.archive = state.archive.filter(function (x) { return x !== key; });
+    delete state.filed[key];
+    var back = { file: uniqueName(body.originalName || doc.file, state.review.map(function (x) { return x.file; })), bytes: doc.bytes, text: doc.text };
+    state.review.push(back);
+    state.log.push([now(), '取り消し', '記録から戻した(' + USER.name + ')', body.docType || '', body.clientCode || '', body.clientName || '', body.periodStart || '', body.periodEnd || '', '', '', '', back.file, REVIEW, back.file, '',
+      '仕分け先が違うため、記録から「要確認」に戻しました' + (body.reason ? '(' + body.reason + ')' : '') + '。正しい内容で確定してください']);
+    return json({ ok: true, message: '「要確認」に戻しました。正しい内容で確定してください', file: back.file });
   }
 
   function exclude(body) {
@@ -288,6 +302,7 @@
     if (method === 'POST' && route === '/api/confirm') return confirm(body);
     if (method === 'POST' && route === '/api/exclude') return exclude(body);
     if (method === 'POST' && route === '/api/undo') return undo();
+    if (method === 'POST' && route === '/api/reopen') return reopen(body);
     if (method === 'POST' && route === '/api/settings') return saveSettings(body);
     if (method === 'POST' && route === '/api/auto') { state.autoRunMinutes = +body.minutes || 0; return json({ ok: true, autoRunMinutes: state.autoRunMinutes }); }
     if (method === 'POST' && route === '/api/logout') return json({ ok: true });

@@ -97,6 +97,9 @@ main { padding: 20px; }
 .field .ng { color: var(--err); }
 .reason { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; }
 .reason b { display: block; }
+.rec-actions { white-space: nowrap; }
+.rec-actions .inline-confirm { white-space: normal; min-width: 220px; margin-top: 6px; }
+.rec-actions button + button { margin-left: 6px; }
 .reason ul { margin: 4px 0 0; padding-left: 1.2em; }
 .reason li { margin: 2px 0; overflow-wrap: anywhere; }
 .reason-hint { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -374,6 +377,9 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
   // 確認が必要な理由を1つずつ並べ、それぞれに「どうすればよいか」を添える
   var REASON_HINTS = [
     [/顧問先マスタに登録がありません/, '新しい顧問先なら「設定」の顧問先マスタに追加します。略称の違いだけなら、顧問先を選んで下の「別名として覚える」にチェックします'],
+    [/記録から「要確認」に戻しました/, '正しい書類種別・顧問先・期間を入れて確定します。同じ帳票でまた間違えるようなら、「次から自動で読めるように」を使います'],
+    [/を取り消しました/, '内容を確かめて、もう一度確定してください'],
+    [/対象外の書類/, '仕分けの対象外なら「除外」します。事務所で保管する書類なら、「設定」の「書類種別を追加」で登録すると、次から自動で仕分けます'],
     [/送付状/, '送付状だけのPDFなら「除外」。同じPDFに中身の書類も入っているなら、その書類として確定します'],
     [/複数の顧問先|別の顧問先/, '1つのPDFに2社分が入っていないか、PDFで確かめてください。入っていれば、分けて受付フォルダに入れ直します'],
     [/期間.*(食い違|紛らわし|見つかりません)|対象期間/, 'PDFの見出しと集計期間を見比べて、正しい期間を入れてください'],
@@ -690,10 +696,32 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
             '<td>' + esc((x.clientCode ? x.clientCode + ' ' : '') + (x.clientName || '―')) + '</td><td>' + esc(x.docType || '―') + '</td>' +
             '<td class="nowrap">' + esc(period(x.periodStart, x.periodEnd, x.docType)) + '</td>' +
             '<td class="file">' + esc(x.fileName) + '<div class="hint">' + esc(x.folder) + '</div></td>' +
-            '<td>' + (x.fullPath ? '<button type="button" class="copy" data-i="' + i + '">場所をコピー</button>' : '') + '</td></tr>';
+            '<td class="rec-actions">' + (x.fullPath ? '<button type="button" class="copy" data-i="' + i + '">場所をコピー</button>' +
+              '<button type="button" class="quiet reopen" data-i="' + i + '">要確認に戻す</button>' +
+              '<div class="inline-confirm" id="reopen-' + i + '" hidden><label class="field"><span>戻す理由(任意)</span><input class="reopen-reason" maxlength="100" placeholder="例:顧問先が違う"></label>' +
+              '<button type="button" class="danger reopen-yes" data-i="' + i + '">戻す</button><button type="button" class="reopen-no" data-i="' + i + '">やめる</button></div>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div>' + (r.items.length >= 200 ? '<p class="hint" style="padding:8px 16px;margin:0">新しい順に200件まで表示しています。条件で絞り込んでください。</p>' : '');
       document.querySelectorAll('#records .copy').forEach(function (b) {
         b.addEventListener('click', function () { copyText(r.items[+b.getAttribute('data-i')].fullPath); });
+      });
+      // 自動で仕分けた書類が間違っていたら、ここから「要確認」に戻して正しく確定し直す
+      document.querySelectorAll('#records .reopen').forEach(function (b) {
+        b.addEventListener('click', function () { var box = $('reopen-' + b.getAttribute('data-i')); box.hidden = false; box.querySelector('input').focus(); });
+      });
+      document.querySelectorAll('#records .reopen-no').forEach(function (b) {
+        b.addEventListener('click', function () { $('reopen-' + b.getAttribute('data-i')).hidden = true; });
+      });
+      document.querySelectorAll('#records .reopen-yes').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var i = +b.getAttribute('data-i'), x = r.items[i];
+          var body = { folder: x.folder, fileName: x.fileName, originalName: x.originalName, docType: x.docType, clientCode: x.clientCode, clientName: x.clientName,
+            periodStart: x.periodStart, periodEnd: x.periodEnd, reason: $('reopen-' + i).querySelector('input').value };
+          b.disabled = true;
+          api('POST', '/api/reopen', body).then(function (res) {
+            toast(res.message, false, { label: '要確認を開く', fn: function () { current = res.file; location.hash = 'review'; loadReview(); } });
+            return Promise.all([loadRecords(), loadReview(), loadStatus()]);
+          }).catch(function (e) { b.disabled = false; toast(e.message, true); });
+        });
       });
     }).catch(function (e) { toast(e.message, true); });
   }

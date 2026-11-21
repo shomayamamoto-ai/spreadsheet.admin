@@ -159,7 +159,8 @@ var TaxDocExtractor = (function () {
       .replace(/[‐‑–—―−](?=\d)/g, '-') // 数字前のハイフン類
       .replace(/\(株\)/g, '株式会社')
       .replace(/\(有\)/g, '有限会社')
-      .replace(/\(同\)/g, '合同会社');
+      .replace(/\(同\)/g, '合同会社')
+      .replace(/令 和/g, '令和').replace(/平 成/g, '平成');
     // 「R.6.10.1」「H.30.4.1」→ 令和・平成
     t = t.replace(/(^|[^A-Za-z])R\.\s?(\d{1,2})(?=[.\/年])/g, '$1令和$2').replace(/(^|[^A-Za-z])H\.\s?(\d{1,2})(?=[.\/年])/g, '$1平成$2');
     // 「令和 0 7 年」「1 0 日」のように、数字の間に空白が入ったもの(年・月・日の直前だけ)
@@ -261,6 +262,12 @@ var TaxDocExtractor = (function () {
     return list;
   }
 
+  // 仕分けの対象外の書類(書類名の終わり方で見分ける)。事務所で扱う場合は、書類種別を追加すると、表題の目印が優先される
+  var NOT_TARGET = /(?:通知書|通知|お知らせ|ご案内|案内|証明書|内訳書|内訳明細書|告知書|見積書|納品書|領収書|資金繰り表|予算書|推移表|説明書|給与明細書|賃金台帳)$/;
+
+  // 書類名にあれば、月次試算表以外としては扱わない言葉(推移表・前期比較・予算実績比較など、決算書に似た分析資料)
+  var NOT_TARGET_ANY = /推移|前期比較|前年比較|予実|予算実績/;
+
   function detectDocType(lines, flat, types) {
     // 表題:様式番号(「第3-(1)号様式」)や日付だけの行は飛ばし、残りの最初の2行を表題とみなす
     var titleLines = lines.filter(function (l) {
@@ -277,11 +284,12 @@ var TaxDocExtractor = (function () {
     var titleOf = function (l) {
       return compact(l).replace(/[((][^))]*[))]/g, '').replace(/^(?:(?:令和|平成)\d{1,2}|20\d{2})年(?:分|度)?の?/, '');
     };
+    // 表題らしい行:書類名(「〜書」「〜表」「〜帳」「別表一」など)で終わる、短い1行
+    // (「法人税の課税標準 27,412,000」「調査対象税目 法人税・消費税」のような本文の行は表題にしない)
     var strictTitle = function (l, w) {
       var c = titleOf(l);
-      // 末尾で一致してよいのは「〜書」「〜表」のような書類名だけ(「調査対象税目 法人税・消費税」を表題にしない)
-      return c.length <= 32 && c.indexOf('、') < 0 &&
-        (c.indexOf(w) === 0 || (/[書表帳票録簿届]$/.test(w) && c.slice(-w.length) === w));
+      return c.length <= 32 && c.indexOf('、') < 0 && c.indexOf(w) >= 0 &&
+        (/[書表帳票録簿届]$/.test(c) || /^別表[一二三四五六七八九十]/.test(c));
     };
     var strictAny = function (l) {
       return allTypes.some(function (dt) { return (dt.titleWords || []).some(function (w) { return strictTitle(l, w); }); });
@@ -295,6 +303,17 @@ var TaxDocExtractor = (function () {
       var tail = titleLines.slice(-6).filter(strictAny);
       if (tail.length) { title = titleOf(tail[tail.length - 1]); fromTail = true; used = [tail[tail.length - 1]]; }
     }
+    // 通知書・お知らせ・証明書・内訳書などは、書類名に「法人税」「所得税」などが入っていても対象外の書類
+    var denied = '', deniedAny = '';
+    titleLines.slice(0, 3).concat(titleLines.slice(-3)).some(function (l) {
+      var c = titleOf(l);
+      // 「添付書類 貸借対照表 損益計算書 … 内訳明細書」のような、書類名を並べた本文の行は除く
+      var raw = l.replace(/[((][^))]*[))]/g, '').replace(/^(?:(?:令和|平成)\s?\d{1,2}|20\d{2})\s?年(?:分|度)?の?\s*/, '').trim();
+      if (/\s/.test(raw)) return false;
+      if (c.length <= 40 && NOT_TARGET.test(c)) { denied = c; return true; }
+      if (c.length <= 40 && NOT_TARGET_ANY.test(c)) { deniedAny = c; }
+      return false;
+    });
     // 様式名が「〜申請書」「〜届出書」で終わる書類は、中身に「源泉所得税」などがあっても届出書・申請書
     var formTitle = /(?:申請書|届出書|届書)$/.test(titleOf(titleLines[0] || ''));
     // 冒頭付近(見出しが最後に出力されたPDFでは、末尾付近)
@@ -329,6 +348,8 @@ var TaxDocExtractor = (function () {
       return { type: dt, score: score, hits: hits, titled: titled, bodyTitle: inBody[0] || '' };
     });
     scores.sort(function (a, b) { return b.score - a.score; });
+    scores.denied = denied;
+    scores.deniedAny = deniedAny;
     return scores;
   }
 
@@ -558,6 +579,12 @@ var TaxDocExtractor = (function () {
       var b = distinct(bare);
       if (b.length === 1) return b[0];
       if (point && !ranges.length) return point;
+      // 請求書は、請求日(発行日)の月
+      if (type && type.id === 'invoice') {
+        var billed = new RegExp('(?:請求日|発行日|請求年月日)[::]?' + d).exec(flat);
+        var bd = billed ? toDate(billed, 1) : null;
+        if (bd) return monthOf(bd.y, bd.m);
+      }
       return null;
     }
     if (kind === 'fiscal') {
@@ -592,7 +619,7 @@ var TaxDocExtractor = (function () {
   }
 
   function findCreatedDate(flat) {
-    var m = flat.match(new RegExp('(?:作成日|発行日|出力日|印刷日|請求日|提出日|作成年月日|開催日時|開催日|届出日|申請日)[::]?' + DATE_RE_SRC));
+    var m = flat.match(new RegExp('(?:作成日|発行日|出力日|印刷日|請求日|提出日|作成年月日|開催日時|開催日|届出日|申請日|(?:^|[\\d.、])日時)[::]?' + DATE_RE_SRC));
     return m ? toDate(m, 1) : null;
   }
 
@@ -743,6 +770,12 @@ var TaxDocExtractor = (function () {
     if (!docType) addIssue('type_missing', '書類種別を判定できません');
     else if (second && second.score > 0 && top.score - second.score < 4) {
       addIssue('type_ambiguous', '書類種別が「' + top.type.name + '」か「' + second.type.name + '」か紛らわしい');
+    } else if (ranking.denied && !(top.titled && (top.type.id.indexOf('custom_') === 0 || (top.type.titleWords || []).indexOf(ranking.denied) >= 0))) {
+      // 事務所が追加した書類種別や、覚えさせた表題と一致するときは、対象外とみなさない
+      addIssue('type_ambiguous', '「' + ranking.denied + '」は、仕分けの対象外の書類の可能性があります');
+    } else if (ranking.deniedAny && top.type.id !== 'monthly' && top.type.id.indexOf('custom_') !== 0) {
+      // 推移表・前期比較は、月次試算表としては読めても、決算書などとしては扱わない
+      addIssue('type_ambiguous', '「' + ranking.deniedAny + '」は、仕分けの対象外の書類の可能性があります');
     } else if (/送付状|送付書|送付のご案内|お送りいたします|お送りします|ご査収/.test(flat)) {
       // 送付状・添え状は、書類名が書かれていても、その書類そのものではない
       addIssue('type_ambiguous', '送付状(添え状)の可能性があります。中身の書類か確かめてください');
