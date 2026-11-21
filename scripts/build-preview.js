@@ -32,9 +32,10 @@ const page = `<title>${BRAND.name} 画面プレビュー</title>
 .preview-note a { color: var(--accent-ink); font-weight: 700; }
 .review { height: calc(100vh - var(--bar-h) - 150px); }
 </style>
-<div class="preview-note"><span>これは製品画面のプレビューです。架空のサンプルPDF9件で、ブラウザの中だけで動きます(書類は送信されません・ページを閉じると元に戻ります)。</span>
+<aside class="preview-note" aria-label="プレビューについて"><span>これは製品画面のプレビューです。架空のサンプルPDF9件で、ブラウザの中だけで動きます(書類は送信されません・ページを閉じると元に戻ります)。</span>
   <a href="report-sample.html" target="_blank" rel="noopener">導入効果レポートのサンプル</a>
-  <a href="docs.html" target="_blank" rel="noopener">販売資料・導入手順</a></div>
+  <a href="docs.html" target="_blank" rel="noopener">販売資料・導入手順</a></aside>
+<script>document.documentElement.lang = 'ja';</script>
 ${body.replace(/__PRODUCT__/g, BRAND.name).replace(/__SUPPORT__/g, '')}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
@@ -97,11 +98,14 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13
 pre { background: var(--paper); padding: 10px 14px; border-radius: 8px; overflow-x: auto; }
 a { color: var(--accent); }
 .note { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 </style></head>
 <body><div class="wrap">
-<nav role="tablist">${docs.map(([id, label], i) => `<button type="button" role="tab" data-doc="${id}" aria-selected="${i === 0}">${label}</button>`).join('')}</nav>
-<p class="note">${BRAND.name}の販売資料(案)です。料金・契約は検討中の案で、契約書の骨子は専門家の確認が前提です。</p>
-<article id="doc">読み込んでいます…</article>
+<header><h1 class="sr-only">${BRAND.name} 販売資料・導入手順</h1>
+<nav role="tablist" aria-label="資料の切り替え">${docs.map(([id, label], i) => `<button type="button" role="tab" data-doc="${id}" aria-selected="${i === 0}">${label}</button>`).join('')}</nav></header>
+
+<main><p class="note">${BRAND.name}の販売資料(案)です。料金・契約は検討中の案で、契約書の骨子は専門家の確認が前提です。</p>
+<article id="doc">読み込んでいます…</article></main>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
 <script>

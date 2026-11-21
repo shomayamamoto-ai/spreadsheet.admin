@@ -98,6 +98,7 @@ main { padding: 20px; }
 .rec-actions button + button { margin-left: 6px; }
 .learn-why { display: block; font-size: 12px; color: var(--muted); margin-left: 1.6em; }
 .learn-why.warn { color: var(--warn); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .reason ul { margin: 4px 0 0; padding-left: 1.2em; }
 .reason li { margin: 2px 0; overflow-wrap: anywhere; }
 .reason-hint { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -195,9 +196,10 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
 .preview-note a { color: var(--accent-ink); font-weight: 700; }
 .review { height: calc(100vh - var(--bar-h) - 150px); }
 </style>
-<div class="preview-note"><span>これは製品画面のプレビューです。架空のサンプルPDF9件で、ブラウザの中だけで動きます(書類は送信されません・ページを閉じると元に戻ります)。</span>
+<aside class="preview-note" aria-label="プレビューについて"><span>これは製品画面のプレビューです。架空のサンプルPDF9件で、ブラウザの中だけで動きます(書類は送信されません・ページを閉じると元に戻ります)。</span>
   <a href="report-sample.html" target="_blank" rel="noopener">導入効果レポートのサンプル</a>
-  <a href="docs.html" target="_blank" rel="noopener">販売資料・導入手順</a></div>
+  <a href="docs.html" target="_blank" rel="noopener">販売資料・導入手順</a></aside>
+<script>document.documentElement.lang = 'ja';</script>
 
 <header class="topbar">
   <div class="brand"><span class="mark" aria-hidden="true"></span><div><b>PDF仕分けアシスタント</b><small id="office-name"></small></div></div>
@@ -292,7 +294,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
     </section>
     <section class="card"><div class="card-head"><h2>顧問先マスタ</h2>
         <div class="chips"><label class="hint" for="s-csv">CSVから読み込む <input id="s-csv" type="file" accept=".csv,text/csv"></label><button type="button" id="btn-add-client">顧問先を追加</button></div></div>
-      <div class="scroll"><table class="edit"><thead><tr><th>顧問先コード</th><th>顧問先名(正式名称)</th><th>別名(「、」区切り)</th><th>決算月</th><th></th></tr></thead><tbody id="s-clients"></tbody></table></div>
+      <div class="scroll"><table class="edit"><thead><tr><th>顧問先コード</th><th>顧問先名(正式名称)</th><th>別名(「、」区切り)</th><th>決算月</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="s-clients"></tbody></table></div>
       <p class="hint" style="margin:8px 16px 14px">CSVの列:顧問先コード,顧問先名,別名,決算月(1行目は見出し)。別名には、書類に出てくる略称(例:正式名称「株式会社〇〇」に対して「〇〇」)を入れると読み取りやすくなります。</p>
     </section>
     <section class="card"><div class="card-head"><h2>書類種別</h2><button type="button" id="btn-add-type">書類種別を追加</button></div>
@@ -710,7 +712,7 @@ footer { max-width: 1320px; margin: 8px auto 0; padding: 0 20px 24px; color: var
     var q = '?q=' + encodeURIComponent($('r-q').value) + '&status=' + encodeURIComponent($('r-status').value) + '&month=' + encodeURIComponent($('r-month').value);
     api('GET', '/api/records' + q).then(function (r) {
       if (!r.items.length) { $('records').innerHTML = '<p class="hint" style="padding:16px;margin:0">条件に合う記録はありません。</p>'; return; }
-      $('records').innerHTML = '<div class="scroll"><table><thead><tr><th>処理日時</th><th>状態</th><th>顧問先</th><th>書類種別</th><th>対象期間</th><th>ファイル名</th><th></th></tr></thead><tbody>' +
+      $('records').innerHTML = '<div class="scroll"><table><thead><tr><th>処理日時</th><th>状態</th><th>顧問先</th><th>書類種別</th><th>対象期間</th><th>ファイル名</th><th><span class="sr-only">操作</span></th></tr></thead><tbody>' +
         r.items.map(function (x, i) {
           return '<tr><td class="nowrap mono" style="font-size:12px">' + esc(x.at.slice(0, 16)) + '</td><td>' + pill(x.status) + '</td>' +
             '<td>' + esc((x.clientCode ? x.clientCode + ' ' : '') + (x.clientName || '―')) + '</td><td>' + esc(x.docType || '―') + '</td>' +

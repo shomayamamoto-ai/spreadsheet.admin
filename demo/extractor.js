@@ -161,6 +161,11 @@ var TaxDocExtractor = (function () {
       .replace(/\(有\)/g, '有限会社')
       .replace(/\(同\)/g, '合同会社')
       .replace(/令 和/g, '令和').replace(/平 成/g, '平成');
+    // スキャンした書類の文字起こしで起きやすい誤り:数字の中の O・l・I・S(「3O日」「16,7S0」「第l2期」)、
+    // 「株式会杜」「令和7年1月1曰」
+    t = t.replace(/[0-9OolIS][0-9OolIS,.]*[0-9OolIS]/g, function (m) {
+      return /\d/.test(m) && /[OolIS]/.test(m) ? m.replace(/[Oo]/g, '0').replace(/[lI]/g, '1').replace(/S/g, '5') : m;
+    }).replace(/(株式|有限|合同|合名|合資)会杜/g, '$1会社').replace(/([月年 ])[lI](?= ?[日曰月年])/g, '$11').replace(/(\d)曰/g, '$1日');
     // 「R.6.10.1」「H.30.4.1」→ 令和・平成
     t = t.replace(/(^|[^A-Za-z])R\.\s?(\d{1,2})(?=[.\/年])/g, '$1令和$2').replace(/(^|[^A-Za-z])H\.\s?(\d{1,2})(?=[.\/年])/g, '$1平成$2');
     // 「令和 0 7 年」「1 0 日」のように、数字の間に空白が入ったもの(年・月・日の直前だけ)
@@ -181,7 +186,8 @@ var TaxDocExtractor = (function () {
   function cutTrailingLabel(s) {
     return s.replace(/(?:作成日|出力日|印刷日|作成年月日|会計期間|事業年度|課税期間|代表取締役|代表社員|代表者|顧問先コード|関与先コード)[\s\S]*$/, '')
       .replace(/自(?=令和|平成|R\d|\d)[\s\S]*$/, '')
-      .replace(/自$/, '');
+      .replace(/自$/, '')
+      .replace(/(御中|殿|様|宛)$/, '');
   }
 
   function compact(text) {
@@ -547,7 +553,7 @@ var TaxDocExtractor = (function () {
     var years = all(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年分|(?:対象年|年分)[::]?(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年/g).map(function (m) {
       if (!m[1] && !m[3]) m = [m[0], m[4], m[5], m[6]];
       var y = m[3] ? parseInt(m[3], 10) : ERA[m[1]] + (m[2] === '元' ? 1 : parseInt(m[2], 10));
-      return { start: { y: y, m: 1, d: 1 }, end: { y: y, m: 12, d: 31 }, kind: 'year' };
+      return { start: { y: y, m: 1, d: 1 }, end: { y: y, m: 12, d: 31 }, kind: 'year', index: m.index };
     });
     var nendo = all(/(?:(令和|平成)(元|\d{1,2})|(20\d{2}))年度/g).map(function (m) {
       var y = m[3] ? parseInt(m[3], 10) : ERA[m[1]] + (m[2] === '元' ? 1 : parseInt(m[2], 10));
@@ -612,6 +618,9 @@ var TaxDocExtractor = (function () {
       return null;
     }
     if (kind === 'year') {
+      // 「令和6年分」と「令和7年分」のように、年分が食い違うときは決めない(「前年分」などは除く)
+      var yd = distinct(years.filter(function (y) { return !/前年|前々年/.test(flat.slice(Math.max(0, y.index - 4), y.index)); }));
+      if (yd.length > 1) return Object.assign({}, yd[0], { conflict: yd.map(function (y) { return '「' + y.end.y + '年分」'; }).join('と') });
       if (years.length) return years[0];
       if (type && type.nendoIsYear && nendo.length) return nendo[0];
       // 「自 1月1日 至 12月31日」と書かれた1年分
@@ -634,7 +643,7 @@ var TaxDocExtractor = (function () {
   }
 
   function findCreatedDate(flat) {
-    var m = flat.match(new RegExp('(?:作成日|発行日|出力日|印刷日|請求日|提出日|作成年月日|開催日時|開催日|届出日|申請日|(?:^|[\\d.、])日時)[::]?' + DATE_RE_SRC));
+    var m = flat.match(new RegExp('(?:作成日|発行日|出力日|印刷日|請求日|提出日|作成年月日|開催日時|開催日|届出日|申請日|日時)[::]?' + DATE_RE_SRC));
     return m ? toDate(m, 1) : null;
   }
 
@@ -748,6 +757,14 @@ var TaxDocExtractor = (function () {
   // ------------------------------------------------------------
   function withholdingMonth(lines) {
     var yy = null, found = {};
+    // 「納期等の区分 自 07年10月 至 07年10月」(令和の2けたの年)
+    var flatL = lines.join(' ');
+    var kubun = flatL.match(/納期等の区分\s*自?\s*(\d{2})\s*年\s*(\d{1,2})\s*月\s*至\s*(\d{2})\s*年\s*(\d{1,2})\s*月/);
+    if (kubun) {
+      var ky = ERA['令和'] + parseInt(kubun[3], 10), km = parseInt(kubun[4], 10);
+      var sy = ERA['令和'] + parseInt(kubun[1], 10), sm = parseInt(kubun[2], 10);
+      if (km >= 1 && km <= 12 && sm >= 1 && sm <= 12) return { start: { y: sy, m: sm, d: 1 }, end: { y: ky, m: km, d: lastDayOfMonth(ky, km) }, kind: sy === ky && sm === km ? 'month' : 'range' };
+    }
     lines.forEach(function (l) {
       var y = l.match(/(?:^|\s)年度\s*(\d{2})(?!\d)/); if (y) yy = parseInt(y[1], 10);
       var g = l.match(/(?:給与等|賞与|報酬|退職手当等?|料金)\s+(\d{2})\s+(\d{1,2})\s+(\d{1,2})\s+\d/);
@@ -857,6 +874,11 @@ var TaxDocExtractor = (function () {
     if (!period && docType && docType.id === 'withholding') period = withholdingMonth(lines);
     if (!period) addIssue('period_missing', '対象期間が見つかりません');
     else if (period.conflict) addIssue('period_ambiguous', '対象期間の書き方が食い違っています(' + period.conflict + ')');
+    else if (docType && docType.periodKind === 'fiscal' && period.kind === 'range' && period.start && period.start.d &&
+      (period.start.d !== 1 || period.end.d !== lastDayOfMonth(period.end.y, period.end.m))) {
+      // 事業年度・課税期間は、ふつう月の初めに始まり月の終わりに終わる(文字起こしの誤りで「30日」が「3日」になった、など)
+      addIssue('period_ambiguous', '事業年度の始まり(' + fmtDate(period.start) + ')か終わり(' + fmtDate(period.end) + ')が、月の初め・終わりになっていません');
+    }
     else if (docType && docType.periodKind === 'fiscal' && master && master.fiscalEndMonth && period.start &&
       (period.end.y - period.start.y) * 12 + (period.end.m - period.start.m) + 1 >= 12 &&
       period.end.m !== parseInt(master.fiscalEndMonth, 10)) {

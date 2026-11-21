@@ -21,11 +21,14 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13
 pre { background: var(--paper); padding: 10px 14px; border-radius: 8px; overflow-x: auto; }
 a { color: var(--accent); }
 .note { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 </style></head>
 <body><div class="wrap">
-<nav role="tablist"><button type="button" role="tab" data-doc="pricing" aria-selected="true">料金プラン案</button><button type="button" role="tab" data-doc="service" aria-selected="false">サービス内容と役割分担</button><button type="button" role="tab" data-doc="contract" aria-selected="false">契約書の骨子</button><button type="button" role="tab" data-doc="setup" aria-selected="false">導入手順</button></nav>
-<p class="note">PDF仕分けアシスタントの販売資料(案)です。料金・契約は検討中の案で、契約書の骨子は専門家の確認が前提です。</p>
-<article id="doc">読み込んでいます…</article>
+<header><h1 class="sr-only">PDF仕分けアシスタント 販売資料・導入手順</h1>
+<nav role="tablist" aria-label="資料の切り替え"><button type="button" role="tab" data-doc="pricing" aria-selected="true">料金プラン案</button><button type="button" role="tab" data-doc="service" aria-selected="false">サービス内容と役割分担</button><button type="button" role="tab" data-doc="contract" aria-selected="false">契約書の骨子</button><button type="button" role="tab" data-doc="setup" aria-selected="false">導入手順</button></nav></header>
+
+<main><p class="note">PDF仕分けアシスタントの販売資料(案)です。料金・契約は検討中の案で、契約書の骨子は専門家の確認が前提です。</p>
+<article id="doc">読み込んでいます…</article></main>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
 <script>

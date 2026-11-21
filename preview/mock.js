@@ -332,6 +332,7 @@
       var file = new URL(f.getAttribute('src'), location.href).searchParams.get('file');
       var box = document.createElement('div');
       box.style.cssText = 'flex:1;overflow:auto;background:#fff;border-radius:0 0 10px 10px';
+      box.tabIndex = 0; box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'PDFの中身(矢印キーで動かせます)');
       box.innerHTML = '<p class="hint" style="padding:16px">PDFを表示しています…</p>';
       f.replaceWith(box);
       renderInto(box, file);

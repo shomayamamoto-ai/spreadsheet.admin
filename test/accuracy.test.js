@@ -65,3 +65,16 @@ test('初見セット4:読めるはずの書類を、要確認に回しすぎな
   const s = score(false, BLIND4);
   assert.ok(s.missed <= 2, `読めずに要確認になった書類が ${s.missed} 件あります\n` + s.lines.join('\n'));
 });
+
+// 初見セット5:スキャンした紙の書類の文字起こし(「3O日」「株式会杜」「(判読不能)」など)
+const BLIND5 = path.join(__dirname, 'fixtures', 'corpus_blind5.js');
+
+test('初見セット5:文字起こしの誤りがあっても、誤って自動で仕分けない', () => {
+  const s = score(false, BLIND5);
+  assert.strictEqual(s.wrongAuto, 0, s.lines.join('\n'));
+});
+
+test('初見セット5:読めるはずの書類を、要確認に回しすぎない', () => {
+  const s = score(false, BLIND5);
+  assert.ok(s.missed <= 2, `読めずに要確認になった書類が ${s.missed} 件あります\n` + s.lines.join('\n'));
+});

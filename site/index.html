@@ -180,16 +180,19 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
   .ledger-row .to { padding-top: 0; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 </style>
 
+<script>document.documentElement.lang = 'ja';</script>
 <div class="wrap">
-  <div class="topbar">
+  <header class="topbar">
     <span class="brand">PDF仕分けアシスタント</span>
     <nav class="topnav" aria-label="ページ内の移動">
       <a href="#problem">課題</a><a href="#how">仕組み</a><a href="#privacy">個人情報</a><a href="#features">できること</a><a href="#effect">効果</a><a href="#start">導入</a><a href="#faq">質問</a>
     </nav>
-  </div>
+  </header>
 
+  <main>
   <header class="hero">
     <div>
       <span class="eyebrow">会計事務所・税理士事務所向け</span>
@@ -259,12 +262,15 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
       <div class="card"><h3>職員のパソコンから使える</h3><p>処理用のパソコン1台で仕分けを動かし、職員は自分のパソコンのブラウザから使います。職員ごとのID・権限(管理者/職員)があり、誰が何をしたかが記録に残ります。</p></div>
       <div class="card"><h3>あとから探せる</h3><p>仕分けた書類を、顧問先・書類種別・月で検索できます。保存場所をコピーして、すぐに開けます。</p></div>
       <div class="card"><h3>精度を数字で測る</h3><p>実際のPDFと正解表を比べ、「誤って自動で仕分けた件数」「要確認の割合」を測ります。測定中はファイルを動かしません。</p></div>
+      <div class="card"><h3>間違いに気づいたら直せる</h3><p>確定・除外の直後は「元に戻す」、自動で仕分けた書類は「記録」から「要確認に戻す」で、正しく仕分け直せます。直した件数は導入効果レポートに載り、実際の運用での誤り率が分かります。</p></div>
+      <div class="card"><h3>使うほど自動が増える</h3><p>同じ表題・呼び方を続けて同じ内容で確定すると、「次から自動で読めるように」を提案します。覚えるかどうかは、最後に人が決めます。</p></div>
+      <div class="card"><h3>対象外の書類は止める</h3><p>通知書・証明書・内訳書・法人住民税の申告書など、言葉が似ていても対象外の書類は、自動で仕分けずに「要確認」にします。</p></div>
     </div>
 
     <h3 style="margin:26px 0 10px">2つの版</h3>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="版の比べ表(横にスクロールできます)">
       <table>
-        <thead><tr><th scope="col"></th><th scope="col">ローカルAI版(おすすめ)</th><th scope="col">Googleスプレッドシート版</th></tr></thead>
+        <thead><tr><th scope="col"><span class="sr-only">項目</span></th><th scope="col">ローカルAI版(おすすめ)</th><th scope="col">Googleスプレッドシート版</th></tr></thead>
         <tbody>
           <tr><th scope="row">動く場所</th><td>事務所のパソコン</td><td>Google のサーバー(Apps Script)</td></tr>
           <tr><th scope="row">読み取り方</th><td>ルール+パソコン内のAI(迷った書類だけ)</td><td>ルールのみ</td></tr>
@@ -311,7 +317,7 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
     <p class="calc-note"><span class="mark guess">仮定</span> 期間は目安です。書類の種類や件数によって変わります。</p>
 
     <h3 style="margin:26px 0 10px">試験運用で測る数字(案)</h3>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="導入の流れの表(横にスクロールできます)">
       <table>
         <thead><tr><th scope="col">数字</th><th scope="col">目安(案)</th><th scope="col">理由</th></tr></thead>
         <tbody>
@@ -332,6 +338,9 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
         <p>その可能性はあります。ただし、顧問先の書類を事務所の外へ送ることになり、守秘義務や契約条件の確認が必要です。この提案では精度よりも「中身を外に出さない」ことを優先し、ローカルAIと人の確認を組み合わせています。</p></details>
       <details><summary>読み取りを間違えたら、どうなりますか?</summary>
         <p>自信がない書類は自動で移動せず「要確認」にします。AIの答えも、根拠の文章をPDFと照合して確かめられたものだけを使います。導入前に精度を測り、「誤って自動仕分け」が0件になるまで調整します。</p></details>
+      <details><summary>精度は、どうやって確かめているのですか?</summary>
+        <p>読み取りのルールを作った担当とは別に、ルールを見ないまま架空の書類を40件ずつ作り(5組・計200件)、ルールを直す前に一度だけ測っています。最初に測ったときの「誤って自動仕分け」は、書き方の違いを多く含む組で40件中1件、スキャンの文字起こしを含む組で40件中3件でした。見つかった弱点はすべて直し、今はどの組も0件です。</p>
+        <p>ただし、これらは架空の書類での結果です。事務所の実際の帳票での精度は、導入前に実際のPDFで測って確かめます。</p></details>
       <details><summary>うちの事務所の帳票やフォルダ構成でも使えますか?</summary>
         <p>フォルダ名・ファイル名の付け方、顧問先マスタ、書類種別は、プログラムを書き換えずに画面の「設定」で合わせられます。要確認の書類を確定するときに帳票の表題を覚えるので、使うほど事務所の帳票に合っていきます。</p></details>
       <details><summary>スキャンした紙の書類も扱えますか?</summary>
@@ -354,6 +363,8 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
       <li><span class="mark guess">仮定</span> パソコンのメモリの目安(資料によって幅あり):<a href="https://www.storagereview.com/best/agentic-ai-hardware" target="_blank" rel="noopener">StorageReview</a>、<a href="https://valebyte.com/en/blog/ollama-server-requirements-ram-vram-and-cpu-by-model-size/" target="_blank" rel="noopener">valebyte</a></li>
     </ol>
   </section>
+
+  </main>
 
   <footer>
     ※ このページとデモに出てくる会社名・金額・書類は、すべて架空のサンプルです。特定の会計ソフトの帳票を再現したものではありません。<br>
